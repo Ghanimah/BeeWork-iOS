@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">BeeWork</string>
+    <string name="title_activity_main">BeeWork</string>
+    <string name="package_name">com.plbee.beework</string>
+    <string name="custom_url_scheme">com.plbee.beework</string>
+</resources>

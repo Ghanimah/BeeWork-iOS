@@ -1,0 +1,188 @@
+// src/pages/AssignShiftPage.tsx
+
+import React, { useEffect, useState } from 'react';
+import { useApp } from '../contexts/AppContext';
+import { db } from '../firebase';
+import {
+  collection,
+  getDocs,
+  addDoc,
+  DocumentData
+} from 'firebase/firestore';
+import { ArrowLeft } from 'lucide-react';
+
+interface Employee {
+  id: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+}
+
+interface FormData {
+  title: string;
+  location: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  hourlyWage: string;
+  latitude: string;
+  longitude: string;
+}
+
+const AssignShiftPage: React.FC = () => {
+  const { user, setCurrentPage } = useApp();
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [formData, setFormData] = useState<FormData>({
+    title: '',
+    location: '',
+    date: '',
+    startTime: '',
+    endTime: '',
+    hourlyWage: '',
+    latitude: '',
+    longitude: '',
+  });
+
+  // Only admins may assign
+  if (user.role !== 'admin') {
+    return (
+      <div className="p-6 text-center text-red-600">
+        🚫 You do not have permission to access this page.
+        <br />
+        <button
+          onClick={() => setCurrentPage('home')}
+          className="mt-4 text-blue-600 underline"
+        >
+          Go back to Home
+        </button>
+      </div>
+    );
+  }
+
+  // Fetch all users once, then only keep those with role === 'user'
+  useEffect(() => {
+    const fetchEmployees = async () => {
+      try {
+        const snapshot = await getDocs(collection(db, 'users'));
+        const list: Employee[] = snapshot.docs
+          .map(doc => {
+            const data = doc.data() as DocumentData;
+            return {
+              id: doc.id,
+              firstName: data.firstName || '',
+              lastName: data.lastName || '',
+              role: data.role || 'user'
+            };
+          })
+          .filter(u => u.role === 'user');
+        setEmployees(list);
+      } catch (err) {
+        console.error('Error loading users:', err);
+      }
+    };
+    fetchEmployees();
+  }, []);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(curr => ({ ...curr, [e.target.name]: e.target.value }));
+  };
+
+  const handleSubmit = async () => {
+    if (!selectedUserId) {
+      alert('Please select an employee.');
+      return;
+    }
+    try {
+      await addDoc(collection(db, 'shifts'), {
+        userId: selectedUserId,
+        title:     formData.title,
+        location:  formData.location,
+        date:      formData.date,
+        startTime: formData.startTime,
+        endTime:   formData.endTime,
+        hourlyWage: parseFloat(formData.hourlyWage),
+        latitude:   parseFloat(formData.latitude),
+        longitude:  parseFloat(formData.longitude),
+        status:    'scheduled',
+      });
+      alert('✅ Shift assigned!');
+      setSelectedUserId('');
+      setFormData({
+        title: '',
+        location: '',
+        date: '',
+        startTime: '',
+        endTime: '',
+        hourlyWage: '',
+        latitude: '',
+        longitude: '',
+      });
+    } catch (err) {
+      console.error('Error assigning shift:', err);
+      alert('❌ Error assigning shift.');
+    }
+  };
+
+  return (
+    <div className="max-w-md mx-auto p-6 bg-white rounded-xl shadow-md mt-10">
+      <button
+        onClick={() => setCurrentPage('profile')}
+        className="flex items-center text-blue-600 hover:text-blue-800 mb-4"
+      >
+        <ArrowLeft size={18} className="mr-2" /> Back to Profile
+      </button>
+
+      <h2 className="text-xl font-bold mb-4">Assign Shift</h2>
+
+      <label className="block mb-2 font-medium">Select Employee:</label>
+      <select
+        value={selectedUserId}
+        onChange={e => setSelectedUserId(e.target.value)}
+        className="w-full mb-4 border border-gray-300 rounded p-2"
+      >
+        <option value="">-- Select --</option>
+        {employees.length > 0 ? (
+          employees.map(emp => (
+            <option key={emp.id} value={emp.id}>
+              {emp.firstName} {emp.lastName}
+            </option>
+          ))
+        ) : (
+          <option disabled>No users with role "user" found</option>
+        )}
+      </select>
+
+      {[
+        ['title', 'Job Title'],
+        ['location', 'Location'],
+        ['date', 'Date (YYYY-MM-DD)'],
+        ['startTime', 'Start Time (HH:MM)'],
+        ['endTime', 'End Time (HH:MM)'],
+        ['hourlyWage', 'Hourly Wage'],
+        ['latitude', 'Latitude'],
+        ['longitude', 'Longitude'],
+      ].map(([key, label]) => (
+        <div key={key} className="mb-3">
+          <label className="block text-sm font-medium mb-1">{label}</label>
+          <input
+            type="text"
+            name={key}
+            value={(formData as any)[key]}
+            onChange={handleChange}
+            className="w-full border border-gray-300 rounded p-2"
+          />
+        </div>
+      ))}
+
+      <button
+        onClick={handleSubmit}
+        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mt-4"
+      >
+        Assign Shift
+      </button>
+    </div>
+  );
+};
+
+export default AssignShiftPage;

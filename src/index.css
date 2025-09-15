@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Safe area padding for iOS/Android */
+body {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+
+  @apply text-neutral-100 bg-neutral-900;
+}
+
+/* Works on iPhone + Android WebView; falls back if env() is 0/unsupported */
+:root {
+  --safe-bottom: max(env(safe-area-inset-bottom, 0px), 20px);
+}
+
+@supports not (padding-bottom: env(safe-area-inset-bottom)) {
+  :root {
+    --safe-bottom: 20px;
+  }
+}
+
+/* General helpers */
+html {
+  scroll-behavior: smooth;
+}
