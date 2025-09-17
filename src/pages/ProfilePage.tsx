@@ -180,15 +180,6 @@ const ProfilePage: React.FC = () => {
               <Settings size={20} className="text-gray-600" />
               <span className="text-gray-700 font-medium">Settings</span>
             </button>
-
-            {user.role === 'admin' && (
-              <button
-                onClick={() => navigate("/assign")}
-                className="mt-4 text-sm text-blue-600 underline"
-              >
-                Assign Shifts (Admin)
-              </button>
-            )}
           </div>
         </div>
       </div>

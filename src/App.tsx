@@ -10,7 +10,7 @@ import AssignShiftPage from './pages/AssignShiftPage';
 import AvailabilityPage from './pages/AvailabilityPage';
 import ShiftDetailPage from './pages/ShiftDetailPage';
 import EmptyShiftPage from './pages/EmptyShiftPage';
-import BeeBuilderPage from './pages/BeeBuilderPage';
+// import BeeBuilderPage from './pages/BeeBuilderPage'; // ← removed
 import SignIn from './pages/SignIn';
 import SignUp from './pages/SignUp';
 
@@ -38,7 +38,7 @@ const AppRoutes: React.FC = () => {
       <Route path="/availability" element={<AvailabilityPage />} />
       <Route path="/shift" element={<ShiftDetailPage />} />
       <Route path="/empty" element={<EmptyShiftPage />} />
-      <Route path="/builder" element={<BeeBuilderPage />} />
+      {/* <Route path="/builder" element={<BeeBuilderPage />} /> */} {/* ← removed */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
@@ -51,7 +51,6 @@ export default function App() {
   return (
     <AuthProvider>
       <AppProvider>
-        {/* Column layout: content scrolls, nav stays at bottom */}
         <div className="min-h-dvh bg-background text-foreground flex flex-col">
           <main className="flex-1 overflow-y-auto">
             <AppRoutes />
