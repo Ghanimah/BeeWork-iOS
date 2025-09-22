@@ -6,7 +6,7 @@ import React, {
   ReactNode
 } from 'react';
 import { User, Shift, Availability, Page } from '../types';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { db } from '../firebase';
 
 interface AppContextType {
@@ -32,15 +32,11 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const useApp = () => {
   const context = useContext(AppContext);
-  if (!context) {
-    throw new Error('useApp must be used within an AppProvider');
-  }
+  if (!context) throw new Error('useApp must be used within an AppProvider');
   return context;
 };
 
-interface AppProviderProps {
-  children: ReactNode;
-}
+interface AppProviderProps { children: ReactNode; }
 
 const defaultUser: User = {
   id: '',
@@ -53,6 +49,85 @@ const defaultUser: User = {
   role: 'employee',
   profilePicture: '',
 };
+
+// Helpers
+function tsToDate(v: any): Date | null {
+  if (!v) return null;
+  if (typeof v.toDate === 'function') return v.toDate();
+  if (typeof v === 'string' || v instanceof String) return new Date(v as string);
+  return null;
+}
+function toISO(d: Date | null): string | undefined {
+  return d ? d.toISOString() : undefined;
+}
+function ymd(d: Date | null): string | undefined {
+  if (!d) return undefined;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const da = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${da}`;
+}
+function mapStatus(s: any): Shift['status'] {
+  // portal: upcoming|live|done  app: scheduled|in-progress|completed
+  if (s === 'live') return 'in-progress';
+  if (s === 'done') return 'completed';
+  if (s === 'upcoming') return 'scheduled';
+  if (s === 'scheduled' || s === 'in-progress' || s === 'completed') return s;
+  return 'scheduled';
+}
+
+function expandPortalShift(doc: QueryDocumentSnapshot<DocumentData>): Shift[] {
+  const d = doc.data() as any;
+  // Required portal fields check
+  if (!('eventName' in d) || !('startTS' in d) || !Array.isArray(d.assigned)) return [];
+  const start = tsToDate(d.startTS);
+  const end = tsToDate(d.endTS);
+  const lat = d.location?.lat;
+  const lng = d.location?.lng;
+  const title = d.jobTitle ? `${d.eventName} – ${d.jobTitle}` : d.eventName;
+  const dateStr = ymd(start);
+  const startISO = toISO(start);
+  const endISO = toISO(end);
+  const hourly = typeof d.rateJOD === 'number' ? d.rateJOD : Number(d.rateJOD ?? 0);
+  const locationLabel =
+    typeof lat === 'number' && typeof lng === 'number'
+      ? `${lat.toFixed(4)}, ${lng.toFixed(4)}`
+      : d.location || '—';
+
+  return d.assigned
+    .filter((uid: any) => typeof uid === 'string' && uid.length > 0)
+    .map((uid: string, idx: number): Shift => ({
+      id: `${doc.id}_${uid}_${idx}`, // per-user virtual id
+      userId: uid,
+      title,
+      location: locationLabel,
+      date: dateStr ?? '',
+      startTime: startISO,
+      endTime: endISO,
+      hourlyWage: hourly,
+      latitude: typeof lat === 'number' ? lat : 0,
+      longitude: typeof lng === 'number' ? lng : 0,
+      status: mapStatus(d.status),
+    }));
+}
+
+function mapAppShift(doc: QueryDocumentSnapshot<DocumentData>): Shift | null {
+  const d = doc.data() as any;
+  if (!('title' in d) || !('userId' in d)) return null;
+  return {
+    id: doc.id,
+    userId: d.userId,
+    title: d.title,
+    location: d.location ?? '—',
+    date: d.date ?? '',
+    startTime: typeof d.startTime === 'string' ? d.startTime : toISO(tsToDate(d.startTime)),
+    endTime: typeof d.endTime === 'string' ? d.endTime : toISO(tsToDate(d.endTime)),
+    hourlyWage: typeof d.hourlyWage === 'number' ? d.hourlyWage : Number(d.hourlyWage ?? 0),
+    latitude: typeof d.latitude === 'number' ? d.latitude : Number(d.latitude ?? 0),
+    longitude: typeof d.longitude === 'number' ? d.longitude : Number(d.longitude ?? 0),
+    status: mapStatus(d.status),
+  };
+}
 
 export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User>(defaultUser);
@@ -70,16 +145,28 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
   const [language, setLanguage] = useState<'en' | 'ar'>('en');
 
-  // 🔄 Subscribe to shifts collection in Firestore
+  // Subscribe to shifts and support BOTH shapes
   useEffect(() => {
     const unsub = onSnapshot(
       collection(db, 'shifts'),
       (snapshot) => {
-        const data = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...(doc.data() as Omit<Shift, 'id'>)
-        }));
-        setShifts(data);
+        const rows: Shift[] = [];
+        snapshot.docs.forEach(doc => {
+          const d = doc.data() as any;
+          if ('eventName' in d) {
+            rows.push(...expandPortalShift(doc));
+          } else {
+            const s = mapAppShift(doc);
+            if (s) rows.push(s);
+          }
+        });
+        // sort by start time desc
+        rows.sort((a, b) => {
+          const ta = a.startTime ? new Date(a.startTime).getTime() : 0;
+          const tb = b.startTime ? new Date(b.startTime).getTime() : 0;
+          return tb - ta;
+        });
+        setShifts(rows);
       },
       (error) => console.error('Shifts subscription error:', error)
     );
@@ -105,7 +192,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           const startTime = new Date(shift.startTime);
           const endTime = new Date(now);
           const totalHours = (endTime.getTime() - startTime.getTime()) / 3600000;
-          const earnings = totalHours * shift.hourlyWage;
+          const earnings = totalHours * (shift.hourlyWage ?? 0);
           return {
             ...shift,
             status: 'completed',
