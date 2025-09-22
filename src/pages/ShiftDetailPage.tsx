@@ -1,23 +1,65 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, MapPin, DollarSign, Clock, Play, Square, ExternalLink, Navigation } from "lucide-react";
+import { ArrowLeft, MapPin, DollarSign, Clock, Play, Square } from "lucide-react";
 import { useApp } from "../contexts/AppContext";
 
 const METERS_RADIUS = 500;
+const TAX_RATE = 0.05; // keep if you want the same total calc as before
 
 const ShiftDetailPage: React.FC = () => {
   const { selectedShift, setCurrentPage, punchIn, punchOut } = useApp();
   const [now, setNow] = useState(Date.now());
   const [distM, setDistM] = useState<number | null>(null);
-  const [locErr, setLocErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [punchStartMs, setPunchStartMs] = useState<number | null>(null);
   const askedRef = useRef(false);
 
   if (!selectedShift) return null;
 
-  const fmtTime = (d?: string) =>
+  const fmtTimeHM = (d?: string) =>
     d ? new Date(d).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "--:--";
+  const fmtDate = (d?: string) =>
+    d ? new Date(d).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) : "";
   const fmtMoney = (n: number) =>
     new Intl.NumberFormat(undefined, { style: "currency", currency: "JOD", maximumFractionDigits: 2 }).format(n);
+
+  const secondaryLine =
+    (selectedShift as any).company ??
+    (selectedShift as any).client ??
+    (selectedShift as any).clientName ??
+    selectedShift.location;
+
+  const startTs = selectedShift.startTime ? new Date(selectedShift.startTime).getTime() : null;
+  const endTs = selectedShift.endTime ? new Date(selectedShift.endTime).getTime() : null;
+
+  const workedHours = useMemo(() => {
+    const start = startTs;
+    const end = selectedShift.status === "in-progress" ? now : endTs ? endTs : null;
+    if (!start || !end) return 0;
+    return Math.max(0, (end - start) / 3_600_000);
+  }, [startTs, endTs, selectedShift.status, now]);
+
+  const scheduledHours = useMemo(() => {
+    if (!startTs || !endTs) return 0;
+    return Math.max(0, (endTs - startTs) / 3_600_000);
+  }, [startTs, endTs]);
+
+  const basePay = (selectedShift.hourlyWage || 0) * scheduledHours;
+  const tax = basePay * TAX_RATE;
+  const total = Math.max(0, basePay - tax);
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  // ✅ Read Firestore Timestamp or ISO and resume timer
+  useEffect(() => {
+    const ts = (selectedShift as any)?.punchedInAt;
+    if (selectedShift.status === "in-progress" && ts) {
+      const ms = typeof ts?.toMillis === "function" ? ts.toMillis() : new Date(ts).getTime();
+      if (!Number.isNaN(ms)) setPunchStartMs(ms);
+    }
+  }, [selectedShift.status, (selectedShift as any)?.punchedInAt]);
 
   const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371e3, toRad = (deg: number) => (deg * Math.PI) / 180;
@@ -26,30 +68,8 @@ const ShiftDetailPage: React.FC = () => {
     return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
   };
 
-  const calcHours = useMemo(() => {
-    const start = selectedShift.startTime ? new Date(selectedShift.startTime).getTime() : null;
-    const end = selectedShift.endTime
-      ? new Date(selectedShift.endTime).getTime()
-      : selectedShift.status === "in-progress"
-      ? now
-      : null;
-    if (!start || !end) return 0;
-    return Math.max(0, (end - start) / 3_600_000);
-  }, [selectedShift.startTime, selectedShift.endTime, selectedShift.status, now]);
-
-  const earnings = calcHours * (selectedShift.hourlyWage || 0);
-
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
-
   const refreshDistance = () => {
-    if (!("geolocation" in navigator)) {
-      setLocErr("Location is not supported on this device.");
-      return;
-    }
-    setLocErr(null);
+    if (!("geolocation" in navigator)) return;
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const d = getDistance(
@@ -60,10 +80,9 @@ const ShiftDetailPage: React.FC = () => {
         );
         setDistM(d);
       },
-      (err) => setLocErr(err.code === 1 ? "Location permission is required." : "Could not get your location.")
+      () => {}
     );
   };
-
   useEffect(() => {
     if (!askedRef.current) {
       askedRef.current = true;
@@ -73,7 +92,6 @@ const ShiftDetailPage: React.FC = () => {
 
   const requireNearby = async (cb: () => Promise<void> | void) => {
     setBusy(true);
-    setLocErr(null);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const d = getDistance(
@@ -94,10 +112,9 @@ const ShiftDetailPage: React.FC = () => {
           setBusy(false);
         }
       },
-      (err) => {
+      () => {
         setBusy(false);
-        setLocErr(err.code === 1 ? "Location permission is required." : "Could not get your location.");
-        alert(locErr ?? "Location permission is required.");
+        alert("Location permission is required.");
       },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
     );
@@ -105,9 +122,6 @@ const ShiftDetailPage: React.FC = () => {
 
   const handlePunchIn = () => {
     const nowTs = Date.now();
-    const startTs = selectedShift.startTime ? new Date(selectedShift.startTime).getTime() : null;
-    const endTs = selectedShift.endTime ? new Date(selectedShift.endTime).getTime() : null;
-
     if (!startTs || !endTs) {
       alert("Shift start and end times are not set yet.");
       return;
@@ -120,95 +134,142 @@ const ShiftDetailPage: React.FC = () => {
       alert("You cannot punch in after the scheduled end time.");
       return;
     }
-    requireNearby(() => punchIn(selectedShift.id));
+    requireNearby(async () => {
+      await punchIn(selectedShift.id);
+      setPunchStartMs(Date.now());
+    });
   };
 
-  // Punch out still allowed after end time (overtime OK)
-  const handlePunchOut = () => requireNearby(() => punchOut(selectedShift.id));
+  // Punch out allowed after end (overtime ok)
+  const handlePunchOut = () =>
+    requireNearby(async () => {
+      await punchOut(selectedShift.id);
+      setPunchStartMs(null);
+    });
+
+  const timerText = (() => {
+    const start = punchStartMs;
+    if (!start) return null;
+    const secs = Math.max(0, Math.floor((now - start) / 1000));
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  })();
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pb-32">
-      <div className="px-4 pt-8 max-w-md mx-auto">
-        <div className="flex items-center mb-6">
-          <button onClick={() => setCurrentPage("home")} className="p-2 rounded-lg hover:bg-gray-100 transition-colors mr-3">
-            <ArrowLeft size={20} className="text-gray-600" />
-          </button>
-          <h1 className="text-xl font-bold text-gray-800">Shift Details</h1>
+    <div className="min-h-screen bg-white pb-32">
+      <div className="px-4 pt-4 max-w-md mx-auto">
+        {/* Header */}
+        <button onClick={() => setCurrentPage("home")} className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
+          <ArrowLeft size={20} className="text-gray-700" />
+        </button>
+
+        <div className="mt-2">
+          <h1 className="text-2xl font-bold text-gray-900">{selectedShift.title}</h1>
+          <p className="text-gray-500 -mt-1">{secondaryLine}</p>
         </div>
 
-        <div className="card mb-6 space-y-4">
-          <h2 className="text-xl font-bold text-gray-800 text-center">{selectedShift.title}</h2>
+        {/* Date & time row */}
+        <div className="mt-4">
+          <p className="text-sm text-gray-500">{fmtDate(selectedShift.startTime)}</p>
+          <p className="text-3xl font-extrabold text-gray-900">
+            {fmtTimeHM(selectedShift.startTime)} <span className="font-semibold">To</span> {fmtTimeHM(selectedShift.endTime)}
+          </p>
+          <p className="text-gray-500 mt-1">{scheduledHours.toFixed(0)} hours</p>
+        </div>
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2 text-gray-600">
-              <MapPin size={18} />
-              <span>{selectedShift.location}</span>
+        {/* Location label */}
+        <div className="mt-6">
+          <div className="flex items-center space-x-2 text-gray-700">
+            <MapPin size={18} />
+            <span className="font-medium">{selectedShift.location}</span>
+          </div>
+        </div>
+
+        {/* Map preview (click → Google Maps) */}
+        <a
+          href={`https://www.google.com/maps/search/?api=1&query=${selectedShift.latitude},${selectedShift.longitude}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block mt-3 overflow-hidden rounded-2xl shadow-sm"
+        >
+          <div className="w-full h-44 bg-gray-200">
+            <iframe
+              title="map"
+              className="w-full h-full pointer-events-none"
+              src={`https://www.google.com/maps?q=${selectedShift.latitude},${selectedShift.longitude}&z=16&output=embed`}
+              loading="lazy"
+            />
+          </div>
+        </a>
+
+        {/* Payment card */}
+        <div className="mt-6 rounded-2xl border border-gray-200 p-4">
+          <h3 className="text-lg font-semibold text-gray-900">Payment</h3>
+          <div className="mt-2 space-y-1 text-gray-600">
+            <div className="flex items-center">
+              <DollarSign size={16} className="mr-2" />
+              <span>JOD {Number(selectedShift.hourlyWage || 0).toFixed(2)}/hr × {scheduledHours.toFixed(0)} hours</span>
             </div>
-            <a
-              href={`https://www.google.com/maps/search/?api=1&query=${selectedShift.latitude},${selectedShift.longitude}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:underline flex items-center space-x-1"
-            >
-              <ExternalLink size={16} />
-              <span>Map</span>
-            </a>
+            <div className="text-gray-500">{(TAX_RATE * 100).toFixed(0)}% Worker Tax</div>
           </div>
-
-          <div className="flex items-center space-x-2 text-gray-600">
-            <Clock size={18} />
-            <span>
-              {fmtTime(selectedShift.startTime)} - {fmtTime(selectedShift.endTime)}
-            </span>
-          </div>
-
-          <div className="flex items-center space-x-2 text-gray-600">
-            <Clock size={18} />
-            <span>{calcHours.toFixed(2)} hours • {fmtMoney(earnings)}</span>
-          </div>
-
-          <div className="flex items-center space-x-2 text-gray-600">
-            <DollarSign size={18} />
-            <span>{fmtMoney(selectedShift.hourlyWage || 0)}/hour</span>
-          </div>
-
-          <div className="flex items-center justify-between text-gray-600">
-            <button onClick={refreshDistance} className="flex items-center space-x-1 underline">
-              <Navigation size={16} />
-              <span>Check distance</span>
-            </button>
-            <span>{distM != null ? `~${distM.toFixed(0)} m away` : locErr ? "Location unavailable" : "—"}</span>
+          <div className="mt-2 font-bold text-gray-900">
+            {fmtMoney(total)} <span className="font-normal text-gray-500">Total</span>
           </div>
         </div>
-      </div>
 
-      <div className="fixed bottom-4 left-4 right-4 z-50">
-        <div className="max-w-md mx-auto">
+        {/* Button + live timer */}
+        <div className="mt-4">
           {selectedShift.status === "scheduled" && (
             <button
               onClick={handlePunchIn}
               disabled={busy}
-              className={`w-full ${busy ? "opacity-70" : ""} bg-green-500 hover:bg-green-600 text-white font-bold py-4 px-6 rounded-xl transition-colors duration-200 shadow-lg hover:shadow-xl flex items-center justify-center space-x-2`}
+              className={`w-full ${busy ? "opacity-70" : ""} bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-6 rounded-2xl shadow`}
             >
-              <Play size={20} />
-              <span>{busy ? "Checking location..." : "Punch In"}</span>
+              <div className="flex items-center justify-center space-x-2">
+                <Play size={20} />
+                <span>{busy ? "Checking location..." : "Punch In"}</span>
+              </div>
             </button>
           )}
 
           {selectedShift.status === "in-progress" && (
-            <button
-              onClick={handlePunchOut}
-              disabled={busy}
-              className={`w-full ${busy ? "opacity-70" : ""} btn-danger py-4 flex items-center justify-center space-x-2`}
-            >
-              <Square size={20} />
-              <span>{busy ? "Checking location..." : "Punch Out"}</span>
-            </button>
+            <div className="space-y-2">
+              <button
+                onClick={handlePunchOut}
+                disabled={busy}
+                className={`w-full ${busy ? "opacity-70" : ""} bg-red-600 hover:bg-red-700 text-white font-bold py-4 px-6 rounded-2xl shadow`}
+              >
+                <div className="flex items-center justify-center space-x-2">
+                  <Square size={20} />
+                  <span>{busy ? "Checking location..." : "Punch Out"}</span>
+                </div>
+              </button>
+              <div className="text-center text-sm text-gray-700">
+                <div className="inline-flex items-center space-x-1">
+                  <Clock size={16} />
+                  <span>{timerText ?? "00:00:00"}</span>
+                </div>
+              </div>
+            </div>
           )}
 
           {selectedShift.status === "completed" && (
-            <div className="text-center text-blue-700 font-medium p-4 bg-blue-50 rounded-xl">Shift Completed</div>
+            <div className="text-center text-blue-700 font-medium p-4 bg-blue-50 rounded-2xl">Shift Completed</div>
           )}
+
+          <div className="text-center text-xs text-gray-500 mt-2">
+            {distM != null ? `You are ~${distM.toFixed(0)} m from site` : "—"}
+          </div>
+        </div>
+
+        {/* Live earnings/hrs */}
+        <div className="mt-6 flex items-center space-x-2 text-gray-600">
+          <Clock size={18} />
+          <span>
+            {workedHours.toFixed(2)} hours • {fmtMoney(workedHours * (selectedShift.hourlyWage || 0))}
+          </span>
         </div>
       </div>
     </div>
