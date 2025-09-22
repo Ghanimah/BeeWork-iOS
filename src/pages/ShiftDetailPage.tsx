@@ -6,7 +6,7 @@ const METERS_RADIUS = 500;
 const TAX_RATE = 0.05; // 5% worker tax
 
 const ShiftDetailPage: React.FC = () => {
-  const { selectedShift, setCurrentPage, punchIn, punchOut } = useApp();
+  const { selectedShift, setCurrentPage, setSelectedShift, punchIn, punchOut } = useApp();
   const [now, setNow] = useState(Date.now());
   const [distM, setDistM] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -22,7 +22,7 @@ const ShiftDetailPage: React.FC = () => {
   const fmtMoney = (n: number) =>
     new Intl.NumberFormat(undefined, { style: "currency", currency: "JOD", maximumFractionDigits: 2 }).format(n);
 
-  // Show a gray subtitle like the screenshot (company if exists, else client/clientName, else location)
+  // subtitle: company → client → clientName → location
   const secondaryLine =
     (selectedShift as any).company ??
     (selectedShift as any).client ??
@@ -34,8 +34,7 @@ const ShiftDetailPage: React.FC = () => {
 
   const workedHours = useMemo(() => {
     const start = startTs;
-    const end =
-      selectedShift.status === "in-progress" ? now : endTs ? endTs : null;
+    const end = selectedShift.status === "in-progress" ? now : endTs ? endTs : null;
     if (!start || !end) return 0;
     return Math.max(0, (end - start) / 3_600_000);
   }, [startTs, endTs, selectedShift.status, now]);
@@ -68,15 +67,21 @@ const ShiftDetailPage: React.FC = () => {
     return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
   };
 
+  const hasCoords =
+    typeof selectedShift.latitude === "number" &&
+    !Number.isNaN(selectedShift.latitude) &&
+    typeof selectedShift.longitude === "number" &&
+    !Number.isNaN(selectedShift.longitude);
+
   const refreshDistance = () => {
-    if (!("geolocation" in navigator)) return;
+    if (!("geolocation" in navigator) || !hasCoords) return;
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const d = getDistance(
           pos.coords.latitude,
           pos.coords.longitude,
-          selectedShift.latitude,
-          selectedShift.longitude
+          selectedShift.latitude as number,
+          selectedShift.longitude as number
         );
         setDistM(d);
       },
@@ -88,17 +93,28 @@ const ShiftDetailPage: React.FC = () => {
       askedRef.current = true;
       refreshDistance();
     }
-  }, []);
+  }, []); // once
 
   const requireNearby = async (cb: () => Promise<void> | void) => {
+    // If no coordinates on shift, skip proximity check but warn.
+    if (!hasCoords) {
+      if (!busy) setBusy(true);
+      try {
+        await cb();
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
     setBusy(true);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const d = getDistance(
           pos.coords.latitude,
           pos.coords.longitude,
-          selectedShift.latitude,
-          selectedShift.longitude
+          selectedShift.latitude as number,
+          selectedShift.longitude as number
         );
         setDistM(d);
         if (d <= METERS_RADIUS) {
@@ -137,6 +153,8 @@ const ShiftDetailPage: React.FC = () => {
     requireNearby(async () => {
       await punchIn(selectedShift.id);
       setPunchStartMs(Date.now());
+      // reflect state locally so UI updates immediately
+      setSelectedShift({ ...selectedShift, status: "in-progress" as const });
     });
   };
 
@@ -145,6 +163,7 @@ const ShiftDetailPage: React.FC = () => {
     requireNearby(async () => {
       await punchOut(selectedShift.id);
       setPunchStartMs(null);
+      setSelectedShift({ ...selectedShift, status: "completed" as const });
     });
 
   const timerText = (() => {
@@ -219,7 +238,7 @@ const ShiftDetailPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Button + live timer */}
+        {/* Buttons + live timer */}
         <div className="mt-4">
           {selectedShift.status === "scheduled" && (
             <button
@@ -260,7 +279,7 @@ const ShiftDetailPage: React.FC = () => {
           )}
 
           <div className="text-center text-xs text-gray-500 mt-2">
-            {distM != null ? `You are ~${distM.toFixed(0)} m from site` : "—"}
+            {distM != null ? `You are ~${distM.toFixed(0)} m from site` : hasCoords ? "—" : "Location not set for this shift"}
           </div>
         </div>
 

@@ -1,8 +1,8 @@
-import React from 'react';
-import { MapPin, Clock, DollarSign } from 'lucide-react';
-import { useApp } from '../contexts/AppContext';
-import BeeIcon from './BeeIcon';
-import { Shift } from '../types'; // ✅ Import the correct type
+import React, { useMemo } from "react";
+import { MapPin, Clock, DollarSign, Play } from "lucide-react";
+import { useApp } from "../contexts/AppContext";
+import BeeIcon from "./BeeIcon";
+import { Shift } from "../types";
 
 interface UpcomingShiftsProps {
   shifts: Shift[];
@@ -11,32 +11,39 @@ interface UpcomingShiftsProps {
 const UpcomingShifts: React.FC<UpcomingShiftsProps> = ({ shifts }) => {
   const { setSelectedShift, setCurrentPage } = useApp();
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0); // Compare date only
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
 
-  const upcomingShifts = shifts
-    .filter(shift => {
-      const shiftDate = new Date(shift.date);
-      shiftDate.setHours(0, 0, 0, 0);
-      return shiftDate > today && shift.status === 'scheduled';
-    })
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const upcomingShifts = useMemo(
+    () =>
+      shifts
+        .filter((shift) => {
+          const shiftDate = new Date(shift.date);
+          shiftDate.setHours(0, 0, 0, 0);
+          return shiftDate >= today && shift.status === "scheduled";
+        })
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+    [shifts, today]
+  );
 
   const nextShift = upcomingShifts[0];
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'short',
-      day: 'numeric',
+    return date.toLocaleDateString("en-US", {
+      weekday: "long",
+      month: "short",
+      day: "numeric",
     });
   };
 
   const handleShiftClick = () => {
     if (nextShift) {
       setSelectedShift(nextShift);
-      setCurrentPage('shift-detail');
+      setCurrentPage("shift-detail");
     }
   };
 
@@ -59,6 +66,10 @@ const UpcomingShifts: React.FC<UpcomingShiftsProps> = ({ shifts }) => {
                 <p className="text-sm text-gray-600">{formatDate(nextShift.date)}</p>
               </div>
             </div>
+            <div className="flex items-center text-green-600">
+              <Play size={16} className="mr-1" />
+              <span className="text-xs font-medium uppercase">Scheduled</span>
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -69,12 +80,22 @@ const UpcomingShifts: React.FC<UpcomingShiftsProps> = ({ shifts }) => {
 
             <div className="flex items-center space-x-3 text-gray-600">
               <DollarSign size={16} />
-              <span className="text-sm">${nextShift.hourlyWage}/hour</span>
+              <span className="text-sm">JOD {Number(nextShift.hourlyWage).toFixed(2)}/hr</span>
             </div>
 
             <div className="flex items-center space-x-3 text-gray-600">
               <Clock size={16} />
-              <span className="text-sm">Tap to view details</span>
+              <span className="text-sm">
+                {new Date(nextShift.startTime || "").toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}{" "}
+                –{" "}
+                {new Date(nextShift.endTime || "").toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
             </div>
           </div>
         </div>
@@ -89,4 +110,3 @@ const UpcomingShifts: React.FC<UpcomingShiftsProps> = ({ shifts }) => {
 };
 
 export default UpcomingShifts;
-
