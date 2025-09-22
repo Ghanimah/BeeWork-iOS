@@ -3,7 +3,7 @@ import { ArrowLeft, MapPin, DollarSign, Clock, Play, Square } from "lucide-react
 import { useApp } from "../contexts/AppContext";
 
 const METERS_RADIUS = 500;
-const TAX_RATE = 0.05; // keep if you want the same total calc as before
+const TAX_RATE = 0.05; // 5% worker tax
 
 const ShiftDetailPage: React.FC = () => {
   const { selectedShift, setCurrentPage, punchIn, punchOut } = useApp();
@@ -22,6 +22,7 @@ const ShiftDetailPage: React.FC = () => {
   const fmtMoney = (n: number) =>
     new Intl.NumberFormat(undefined, { style: "currency", currency: "JOD", maximumFractionDigits: 2 }).format(n);
 
+  // Show a gray subtitle like the screenshot (company if exists, else client/clientName, else location)
   const secondaryLine =
     (selectedShift as any).company ??
     (selectedShift as any).client ??
@@ -33,7 +34,8 @@ const ShiftDetailPage: React.FC = () => {
 
   const workedHours = useMemo(() => {
     const start = startTs;
-    const end = selectedShift.status === "in-progress" ? now : endTs ? endTs : null;
+    const end =
+      selectedShift.status === "in-progress" ? now : endTs ? endTs : null;
     if (!start || !end) return 0;
     return Math.max(0, (end - start) / 3_600_000);
   }, [startTs, endTs, selectedShift.status, now]);
@@ -52,14 +54,12 @@ const ShiftDetailPage: React.FC = () => {
     return () => clearInterval(t);
   }, []);
 
-  // ✅ Read Firestore Timestamp or ISO and resume timer
   useEffect(() => {
-    const ts = (selectedShift as any)?.punchedInAt;
-    if (selectedShift.status === "in-progress" && ts) {
-      const ms = typeof ts?.toMillis === "function" ? ts.toMillis() : new Date(ts).getTime();
-      if (!Number.isNaN(ms)) setPunchStartMs(ms);
+    const any = (selectedShift as any).punchedInAt;
+    if (selectedShift.status === "in-progress" && any) {
+      setPunchStartMs(new Date(any).getTime());
     }
-  }, [selectedShift.status, (selectedShift as any)?.punchedInAt]);
+  }, [selectedShift.status]);
 
   const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371e3, toRad = (deg: number) => (deg * Math.PI) / 180;
@@ -140,7 +140,7 @@ const ShiftDetailPage: React.FC = () => {
     });
   };
 
-  // Punch out allowed after end (overtime ok)
+  // Punch out allowed after end for overtime
   const handlePunchOut = () =>
     requireNearby(async () => {
       await punchOut(selectedShift.id);

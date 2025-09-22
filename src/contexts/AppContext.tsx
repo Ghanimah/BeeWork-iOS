@@ -6,15 +6,7 @@ import React, {
   ReactNode
 } from 'react';
 import { User, Shift, Availability, Page } from '../types';
-import {
-  collection,
-  onSnapshot,
-  QueryDocumentSnapshot,
-  DocumentData,
-  doc,
-  runTransaction,
-  serverTimestamp
-} from 'firebase/firestore';
+import { collection, onSnapshot, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 import { db } from '../firebase';
 
 interface AppContextType {
@@ -30,8 +22,8 @@ interface AppContextType {
   setCurrentPage: (page: Page) => void;
   setSelectedShift: (shift: Shift | null) => void;
   setLanguage: (language: 'en' | 'ar') => void;
-  punchIn: (shiftId: string) => void;   // keeps your signature
-  punchOut: (shiftId: string) => void;  // keeps your signature
+  punchIn: (shiftId: string) => void;
+  punchOut: (shiftId: string) => void;
   updateProfile: (updates: Partial<User>) => void;
   logout: () => void;
 }
@@ -61,7 +53,7 @@ const defaultUser: User = {
 // Helpers
 function tsToDate(v: any): Date | null {
   if (!v) return null;
-  if (typeof (v as any).toDate === 'function') return (v as any).toDate();
+  if (typeof v.toDate === 'function') return v.toDate();
   if (typeof v === 'string' || v instanceof String) return new Date(v as string);
   return null;
 }
@@ -105,7 +97,7 @@ function expandPortalShift(doc: QueryDocumentSnapshot<DocumentData>): Shift[] {
   return d.assigned
     .filter((uid: any) => typeof uid === 'string' && uid.length > 0)
     .map((uid: string, idx: number): Shift => ({
-      id: `${doc.id}_${uid}_${idx}`, // per-user virtual id (may not exist as a Firestore doc)
+      id: `${doc.id}_${uid}_${idx}`, // per-user virtual id
       userId: uid,
       title,
       location: locationLabel,
@@ -181,20 +173,18 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     return () => unsub();
   }, []);
 
-  // ---------- Firestore-backed punch in/out with graceful fallback ----------
-
-  const doLocalPunchIn = (shiftId: string) => {
+  const punchIn = (shiftId: string) => {
     const now = new Date().toISOString();
     setShifts(prev =>
       prev.map(shift =>
         shift.id === shiftId
-          ? { ...shift, status: 'in-progress', startTime: shift.startTime ?? now }
+          ? { ...shift, status: 'in-progress', startTime: now }
           : shift
       )
     );
   };
 
-  const doLocalPunchOut = (shiftId: string) => {
+  const punchOut = (shiftId: string) => {
     const now = new Date().toISOString();
     setShifts(prev =>
       prev.map(shift => {
@@ -209,12 +199,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
             endTime: now,
             totalHours: Math.round(totalHours * 100) / 100,
             earnings:   Math.round(earnings   * 100) / 100,
-          } as any;
+          };
         }
         return shift;
       })
     );
-    // Update user total hours locally
+
     const shift = shifts.find(s => s.id === shiftId);
     if (shift && shift.startTime) {
       const startTime = new Date(shift.startTime);
@@ -226,78 +216,6 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       }));
     }
   };
-
-  // Keep your function signatures (void). Do async work inside.
-  const punchIn = (shiftId: string) => {
-    (async () => {
-      try {
-        // Try to update a real Firestore doc first
-        await runTransaction(db, async (tx) => {
-          const ref = doc(db, 'shifts', shiftId);
-          const snap = await tx.get(ref);
-          if (!snap.exists()) throw new Error('NO_DOC'); // fall back
-
-          const s = snap.data() as any;
-          const start = s.startTime ? new Date(s.startTime).getTime() : 0;
-          const end = s.endTime ? new Date(s.endTime).getTime() : 0;
-          const now = Date.now();
-
-          if (!start || !end) throw new Error('Shift window not set');
-          if (now < start) throw new Error('Too early to punch in');
-          if (now > end) throw new Error('Too late to punch in');
-
-          tx.update(ref, {
-            status: 'in-progress',
-            userId: s.userId ?? user.id ?? '',
-            punchedInAt: serverTimestamp(),
-          });
-          const log = doc(collection(ref, 'timeEntries'));
-          tx.set(log, { type: 'in', at: serverTimestamp(), uid: user.id ?? '' });
-        });
-
-        // mirror to local state quickly
-        doLocalPunchIn(shiftId);
-      } catch (e: any) {
-        // If the document doesn't exist (virtual portal id), fall back to local
-        if (e?.message === 'NO_DOC') {
-          console.warn('Firestore doc not found for shiftId, using local punch-in:', shiftId);
-          doLocalPunchIn(shiftId);
-        } else {
-          alert(e?.message ?? 'Punch-in failed');
-        }
-      }
-    })();
-  };
-
-  const punchOut = (shiftId: string) => {
-    (async () => {
-      try {
-        await runTransaction(db, async (tx) => {
-          const ref = doc(db, 'shifts', shiftId);
-          const snap = await tx.get(ref);
-          if (!snap.exists()) throw new Error('NO_DOC');
-
-          tx.update(ref, {
-            status: 'completed',
-            punchedOutAt: serverTimestamp(),
-          });
-          const log = doc(collection(ref, 'timeEntries'));
-          tx.set(log, { type: 'out', at: serverTimestamp(), uid: user.id ?? '' });
-        });
-
-        doLocalPunchOut(shiftId);
-      } catch (e: any) {
-        if (e?.message === 'NO_DOC') {
-          console.warn('Firestore doc not found for shiftId, using local punch-out:', shiftId);
-          doLocalPunchOut(shiftId);
-        } else {
-          alert(e?.message ?? 'Punch-out failed');
-        }
-      }
-    })();
-  };
-
-  // ------------------------------------------------------------------------
 
   const updateProfile = (updates: Partial<User>) => {
     setUser(prev => ({ ...prev, ...updates }));
