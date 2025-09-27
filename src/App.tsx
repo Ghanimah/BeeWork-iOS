@@ -14,6 +14,9 @@ import EmptyShiftPage from './pages/EmptyShiftPage';
 import SignIn from './pages/SignIn';
 import SignUp from './pages/SignUp';
 
+// NEW
+import PersonalInfoPage from './pages/PersonalInfoPage';
+
 const SignInRoute: React.FC = () => {
   const n = useNavigate();
   return <SignIn onSwitch={() => n('/sign-up')} />;
@@ -34,6 +37,10 @@ const AppRoutes: React.FC = () => {
       <Route path="/home" element={<HomePage />} />
       <Route path="/profile" element={<ProfilePage />} />
       <Route path="/settings" element={<SettingsPage />} />
+
+      {/* NEW route */}
+      <Route path="/personal-info" element={<PersonalInfoPage />} />
+
       <Route path="/assign" element={<AssignShiftPage />} />
       <Route path="/availability" element={<AvailabilityPage />} />
       <Route path="/shift" element={<ShiftDetailPage />} />

@@ -1,25 +1,65 @@
 apply plugin: 'com.android.application'
 
+// --- added (safe) keystore loader ---
+import java.util.Properties
+import java.io.FileInputStream
+
+def keystoreProps = new Properties()
+def hasKeystore = false
+def keystorePropsFile = rootProject.file("key.properties")
+if (keystorePropsFile.canRead()) {
+    keystoreProps.load(new FileInputStream(keystorePropsFile))
+    hasKeystore = keystoreProps['storeFile'] &&
+            keystoreProps['storePassword'] &&
+            keystoreProps['keyAlias'] &&
+            keystoreProps['keyPassword']
+}
+// --- end added ---
+
 android {
     namespace "com.plbee.beework"
     compileSdk rootProject.ext.compileSdkVersion
+
     defaultConfig {
         applicationId "com.plbee.beework"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+
+        // ⬇️ BUMPED ONLY THESE TWO LINES
+        versionCode 2
+        versionName "1.0.1"
+
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
-             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
-             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+            // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+
+    // --- added (only used if key.properties is present) ---
+    if (hasKeystore) {
+        signingConfigs {
+            release {
+                storeFile file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
+    }
+    // --- end added ---
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+
+            // --- added (attach signing only when available) ---
+            if (hasKeystore) {
+                signingConfig signingConfigs.release
+            }
+            // --- end added ---
         }
     }
 }

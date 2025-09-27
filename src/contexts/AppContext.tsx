@@ -95,22 +95,25 @@ function parseCompositeShiftId(virtualId: string): { shiftDocId: string; userIdI
   return { shiftDocId: virtualId };
 }
 
+// ---------- UPDATED to match portal fields (companyName, locationName, location.lat/lng)
 function expandPortalShift(docSnap: QueryDocumentSnapshot<DocumentData>): Shift[] {
   const d = docSnap.data() as any;
-  if (!('eventName' in d) || !('startTS' in d) || !Array.isArray(d.assigned)) return [];
+  if (!('companyName' in d) || !('startTS' in d) || !Array.isArray(d.assigned)) return [];
   const start = tsToDate(d.startTS);
   const end = tsToDate(d.endTS);
+
+  // coords for geofence (hidden from UI)
   const lat = d.location?.lat;
   const lng = d.location?.lng;
-  const title = d.jobTitle ? `${d.eventName} – ${d.jobTitle}` : d.eventName;
+
+  // title uses companyName now
+  const title = d.jobTitle ? `${d.companyName} – ${d.jobTitle}` : d.companyName;
+  const locationLabel = d.locationName || '—'; // show this in UI, not coords
+
   const dateStr = ymd(start);
   const startISO = toISO(start);
   const endISO = toISO(end);
   const hourly = typeof d.rateJOD === 'number' ? d.rateJOD : Number(d.rateJOD ?? 0);
-  const locationLabel =
-    typeof lat === 'number' && typeof lng === 'number'
-      ? `${lat.toFixed(4)}, ${lng.toFixed(4)}`
-      : d.location || '—';
 
   return d.assigned
     .filter((uid: any) => typeof uid === 'string' && uid.length > 0)
@@ -118,13 +121,13 @@ function expandPortalShift(docSnap: QueryDocumentSnapshot<DocumentData>): Shift[
       id: `${docSnap.id}_${uid}_${idx}`, // virtual per-user id
       userId: uid,
       title,
-      location: locationLabel,
+      location: locationLabel, // show human-readable location from portal
       date: dateStr ?? '',
       startTime: startISO,
       endTime: endISO,
       hourlyWage: hourly,
-      latitude: typeof lat === 'number' ? lat : 0,
-      longitude: typeof lng === 'number' ? lng : 0,
+      latitude: typeof lat === 'number' ? lat : 0,   // used for 500m geofence
+      longitude: typeof lng === 'number' ? lng : 0,  // used for 500m geofence
       status: mapStatus(d.status),
     }));
 }
@@ -172,7 +175,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         const rows: Shift[] = [];
         snapshot.docs.forEach(docSnap => {
           const d = docSnap.data() as any;
-          if ('eventName' in d) {
+          if ('eventName' in d || 'companyName' in d) {
             rows.push(...expandPortalShift(docSnap));
           } else {
             const s = mapAppShift(docSnap);

@@ -1,19 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, MapPin, DollarSign, Clock, Play, Square } from "lucide-react";
 import { useApp } from "../contexts/AppContext";
-import { useNavigate } from "react-router-dom"; // ✅ added
 
 const METERS_RADIUS = 500;
 const TAX_RATE = 0.05; // 5% worker tax
 
 const ShiftDetailPage: React.FC = () => {
-  const { selectedShift, setSelectedShift, punchIn, punchOut } = useApp();
+  const { selectedShift, setCurrentPage, setSelectedShift, punchIn, punchOut } = useApp();
   const [now, setNow] = useState(Date.now());
   const [distM, setDistM] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [punchStartMs, setPunchStartMs] = useState<number | null>(null);
   const askedRef = useRef(false);
-  const navigate = useNavigate(); // ✅ added
 
   if (!selectedShift) return null;
 
@@ -182,15 +180,7 @@ const ShiftDetailPage: React.FC = () => {
     <div className="min-h-screen bg-white pb-32">
       <div className="px-4 pt-4 max-w-md mx-auto">
         {/* Header */}
-        <button
-          onClick={() => {
-            setSelectedShift(null);     // ✅ clear selection
-            navigate("/home");          // ✅ go back to calendar (router)
-            // setCurrentPage("home");   // (left as-is but not required when using router)
-          }}
-          className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-          aria-label="Back"
-        >
+        <button onClick={() => setCurrentPage("home")} className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
           <ArrowLeft size={20} className="text-gray-700" />
         </button>
 

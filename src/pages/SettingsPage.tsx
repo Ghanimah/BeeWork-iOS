@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Globe, Mail, LogOut, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Globe, Mail, LogOut, ChevronRight, User } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
@@ -20,7 +20,7 @@ const SettingsPage: React.FC = () => {
         rating: 0, totalHours: 0, language: 'en', role: 'employee',
         profilePicture: '',
       });
-      navigate('/'); // go home after logout
+      navigate('/');
     } catch {
       alert('Failed to sign out. Please try again.');
     }
@@ -38,6 +38,7 @@ const SettingsPage: React.FC = () => {
           </div>
 
           <div className="space-y-4">
+            {/* Preferences */}
             <div className="card">
               <h2 className="text-lg font-semibold text-gray-800 mb-4">Preferences</h2>
               <button onClick={handleLanguageToggle} className="w-full flex items-center justify-between p-4 hover:bg-gray-50 rounded-lg transition-colors">
@@ -52,8 +53,26 @@ const SettingsPage: React.FC = () => {
               </button>
             </div>
 
+            {/* Account */}
             <div className="card">
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">Support</h2>
+              <h2 className="text-lg font-semibold text-gray-800 mb-4">Account</h2>
+
+              {/* NEW: Personal information */}
+              <button
+                onClick={() => navigate('/personal-info')}
+                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 rounded-lg transition-colors"
+              >
+                <div className="flex items-center space-x-3">
+                  <User size={20} className="text-gray-600" />
+                  <div className="text-left">
+                    <p className="font-medium text-gray-800">Personal information</p>
+                    <p className="text-sm text-gray-600">Cliq alias & phone number</p>
+                  </div>
+                </div>
+                <ChevronRight size={20} className="text-gray-400" />
+              </button>
+
+              {/* Contact Us */}
               <button onClick={handleContactUs} className="w-full flex items-center justify-between p-4 hover:bg-gray-50 rounded-lg transition-colors">
                 <div className="flex items-center space-x-3">
                   <Mail size={20} className="text-gray-600" />
@@ -64,10 +83,8 @@ const SettingsPage: React.FC = () => {
                 </div>
                 <ChevronRight size={20} className="text-gray-400" />
               </button>
-            </div>
 
-            <div className="card">
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">Account</h2>
+              {/* Log out */}
               <button onClick={handleLogout} className="w-full flex items-center justify-between p-4 hover:bg-red-50 rounded-lg transition-colors text-red-600">
                 <div className="flex items-center space-x-3">
                   <LogOut size={20} />
