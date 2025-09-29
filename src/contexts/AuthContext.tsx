@@ -1,12 +1,6 @@
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  ReactNode,
-} from "react";
+import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { User } from "../types";
 
@@ -24,9 +18,7 @@ export const useAuth = () => {
   return context;
 };
 
-interface AuthProviderProps {
-  children: ReactNode;
-}
+interface AuthProviderProps { children: ReactNode; }
 
 const defaultUser: User = {
   id: "",
@@ -45,33 +37,34 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
-        const docRef = doc(db, "users", firebaseUser.uid);
-        const docSnap = await getDoc(docRef);
+      if (!firebaseUser) { setUser(defaultUser); return; }
 
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setUser({
-            id: firebaseUser.uid,
-            email: firebaseUser.email || "",
-            firstName: data.firstName || "",
-            lastName: data.lastName || "",
-            rating: data.rating || 0,
-            totalHours: data.totalHours || 0,
-            language: data.language || "en",
-            role: data.role || "employee",
-            profilePicture: data.profilePicture || "",
-          });
-        } else {
-          // user doc not found, still set minimal user from Firebase
-          setUser({
-            ...defaultUser,
-            id: firebaseUser.uid,
-            email: firebaseUser.email || "",
-          });
+      const docRef = doc(db, "users", firebaseUser.uid);
+      const docSnap = await getDoc(docRef);
+      const firebaseEmail = firebaseUser.email || "";
+
+      if (docSnap.exists()) {
+        const data = docSnap.data() as any;
+
+        // If Auth email changed (after clicking verification link), sync Firestore profile.
+        if ((data.email || "") !== firebaseEmail) {
+          try { await updateDoc(docRef, { email: firebaseEmail }); } catch {}
         }
+
+        setUser({
+          id: firebaseUser.uid,
+          email: firebaseEmail,
+          firstName: data.firstName || "",
+          lastName: data.lastName || "",
+          rating: data.rating || 0,
+          totalHours: data.totalHours || 0,
+          language: data.language || "en",
+          role: data.role || "employee",
+          profilePicture: data.profilePicture || "",
+        });
       } else {
-        setUser(defaultUser);
+        // user doc not found, still set minimal user from Firebase
+        setUser({ ...defaultUser, id: firebaseUser.uid, email: firebaseEmail });
       }
     });
 

@@ -1,10 +1,20 @@
-// src/pages/ProfilePage.tsx
 import React, { useRef, useEffect, useState } from 'react';
-import { Camera, Star, Clock, Settings, Pencil } from 'lucide-react';
+import { Camera, Star, Clock, Settings, Wallet } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { auth, db } from '../firebase';
-import { doc, getDoc, updateDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { doc, getDoc, collectionGroup, getDocs, query, where } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
+
+function clamp(v: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, v));
+}
+
+// Lateness → stars: ≤5 min => 5★; 30 min => 3.5★; beyond 30 drops linearly to 1★ floor.
+function starsForLateness(minLate: number) {
+  if (minLate <= 5) return 5;
+  const r = 5 - 0.06 * (minLate - 5); // 25 mins span reduces 1.5 stars
+  return clamp(r, 1, 5);
+}
 
 const ProfilePage: React.FC = () => {
   const { user, updateProfile } = useApp();
@@ -14,67 +24,79 @@ const ProfilePage: React.FC = () => {
   const [firstName, setFirstName] = useState('');
   const [lastName,  setLastName]  = useState('');
   const [email,     setEmail]     = useState('');
-  const [editing,   setEditing]   = useState(false);
-  const [changed,   setChanged]   = useState(false);
-  const [calculatedHours, setCalculatedHours] = useState<number>(0);
+  const [totalHours, setTotalHours] = useState<number>(0);
+  const [rating, setRating] = useState<number>(5);
 
   useEffect(() => {
-    const fetchUserData = async () => {
-      const currentUser = auth.currentUser;
-      if (!currentUser) return;
+    const load = async () => {
+      const u = auth.currentUser;
+      if (!u) return;
 
-      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-      if (userDoc.exists()) {
-        const data = userDoc.data();
-        setFirstName(data.firstName || '');
-        setLastName(data.lastName || '');
-        setEmail(data.email || '');
+      // Load profile doc
+      const uDoc = await getDoc(doc(db, 'users', u.uid));
+      if (uDoc.exists()) {
+        const d = uDoc.data() as any;
+        setFirstName(d.firstName || '');
+        setLastName(d.lastName || '');
+        setEmail(d.email || u.email || '');
+        if (typeof d.totalHours === 'number') {
+          setTotalHours(Math.round(d.totalHours * 100) / 100);
+        }
+      } else {
+        setEmail(u.email || '');
       }
 
-      const shiftsRef = collection(db, 'shifts');
-      const q = query(shiftsRef, where('userId', '==', currentUser.uid), where('status', '==', 'completed'));
-      const snapshot = await getDocs(q);
+      // Fallback/derivation from punches for hours and rating
+      const punchesQ = query(collectionGroup(db, 'punches'), where('userId', '==', u.uid));
+      const punchSnaps = await getDocs(punchesQ);
 
-      let total = 0;
-      snapshot.forEach(docu => {
-        const shift = docu.data();
-        if (shift.startTime && shift.endTime) {
-          const start = new Date(shift.startTime);
-          const end   = new Date(shift.endTime);
-          total += (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+      let mins = 0;
+      const latenessStars: number[] = [];
+
+      for (const snap of punchSnaps.docs) {
+        const d = snap.data() as any;
+        if (typeof d.durationMin === 'number') mins += d.durationMin;
+
+        // rating only for completed punches
+        const punchInAt = d?.punchInAt?.toDate?.();
+        const punchOutAt = d?.punchOutAt?.toDate?.();
+        if (!punchInAt || !punchOutAt) continue;
+
+        // parent path: shifts/{shiftId}/punches/{uid}
+        const parts = snap.ref.path.split('/');
+        const shiftId = parts[1];
+        const shiftDoc = await getDoc(doc(db, 'shifts', shiftId));
+        if (!shiftDoc.exists()) continue;
+        const s = shiftDoc.data() as any;
+
+        const schedStart =
+          s?.startTS?.toDate?.() ??
+          s?.startTime?.toDate?.() ??
+          (typeof s?.startTime === 'string' ? new Date(s.startTime) : null);
+
+        if (schedStart) {
+          const lateMin = Math.max(0, Math.round((punchInAt.getTime() - schedStart.getTime()) / 60000));
+          latenessStars.push(starsForLateness(lateMin));
         }
-      });
+      }
 
-      setCalculatedHours(Math.round(total * 100) / 100);
+      setTotalHours(prev => prev || Math.round((mins / 60) * 100) / 100);
+
+      const avg = latenessStars.length
+        ? Math.round((latenessStars.reduce((a, b) => a + b, 0) / latenessStars.length) * 10) / 10
+        : 5;
+      setRating(avg);
     };
 
-    fetchUserData();
+    load();
   }, []);
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = e => {
-        const result = e.target?.result as string;
-        updateProfile({ profilePicture: result });
-      };
+      reader.onload = (e) => updateProfile({ profilePicture: e.target?.result as string });
       reader.readAsDataURL(file);
-    }
-  };
-
-  const triggerImageUpload = () => fileInputRef.current?.click();
-
-  const handleSave = async () => {
-    const currentUser = auth.currentUser;
-    if (!currentUser) return;
-    try {
-      await updateDoc(doc(db, 'users', currentUser.uid), { firstName, lastName, email });
-      setEditing(false);
-      setChanged(false);
-      alert('Profile updated!');
-    } catch {
-      alert('Error saving changes.');
     }
   };
 
@@ -84,15 +106,18 @@ const ProfilePage: React.FC = () => {
         <div className="max-w-md mx-auto">
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold text-gray-800 mb-2">Profile</h1>
-            <p className="text-gray-600">Manage your account information</p>
+            <p className="text-gray-600">Your account information</p>
           </div>
 
           <div className="card text-center">
-            {/* Avatar */}
             <div className="relative mb-6">
               <div className="w-24 h-24 mx-auto mb-4 relative">
                 {user.profilePicture ? (
-                  <img src={user.profilePicture} alt="Profile" className="w-full h-full rounded-full object-cover border-4 border-white shadow-lg" />
+                  <img
+                    src={user.profilePicture}
+                    alt="Profile"
+                    className="w-full h-full rounded-full object-cover border-4 border-white shadow-lg"
+                  />
                 ) : (
                   <div className="w-full h-full rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center shadow-lg">
                     <span className="text-white text-2xl font-bold">
@@ -101,81 +126,60 @@ const ProfilePage: React.FC = () => {
                   </div>
                 )}
                 <button
-                  onClick={triggerImageUpload}
+                  onClick={() => fileInputRef.current?.click()}
                   className="absolute bottom-0 right-0 p-2 bg-amber-500 rounded-full shadow-lg hover:bg-amber-600 transition-colors"
                 >
                   <Camera size={16} className="text-white" />
                 </button>
               </div>
-              <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="hidden"
+              />
             </div>
 
-            {/* Info */}
-            <div className="flex flex-col items-center mb-4">
-              {editing ? (
-                <>
-                  <div className="flex space-x-4 mb-2">
-                    <input
-                      value={firstName}
-                      onChange={e => { setFirstName(e.target.value); setChanged(true); }}
-                      className="p-2 border rounded text-center text-black"
-                      placeholder="First Name"
-                    />
-                    <input
-                      value={lastName}
-                      onChange={e => { setLastName(e.target.value); setChanged(true); }}
-                      className="p-2 border rounded text-center text-black"
-                      placeholder="Last Name"
-                    />
-                  </div>
-                  <input
-                    value={email}
-                    onChange={e => { setEmail(e.target.value); setChanged(true); }}
-                    className="p-2 border rounded text-center w-full text-black"
-                    placeholder="Email"
-                  />
-                </>
-              ) : (
-                <>
-                  {/* ✅ Names centered */}
-                  <div className="mb-1 text-center">
-                    <p className="text-gray-800 font-medium">
-                      {firstName} {lastName}
-                    </p>
-                  </div>
-                  <p className="text-gray-600">{email}</p>
-                </>
-              )}
-
-              <button onClick={() => setEditing(!editing)} className="mt-2 text-gray-500 hover:text-gray-700">
-                <Pencil size={18} />
-              </button>
-
-              {editing && changed && (
-                <button onClick={handleSave} className="mt-3 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded">
-                  Save Changes
-                </button>
-              )}
+            {/* Read-only fields */}
+            <div className="mb-1 text-center">
+              <p className="text-gray-800 font-medium">{firstName} {lastName}</p>
             </div>
+            <p className="text-gray-600">{email}</p>
 
-            {/* Stats */}
-            <div className="grid grid-cols-2 gap-4 mb-6 mt-6">
+            {/* Tiles */}
+            <div className="grid grid-cols-2 gap-4 mb-3 mt-6">
               <div className="p-4 bg-amber-50 rounded-xl text-center">
                 <div className="flex items-center justify-center mb-2"><Star size={20} className="text-amber-600" /></div>
-                <div className="text-2xl font-bold text-gray-800">{user.rating}</div>
+                <div className="text-2xl font-bold text-gray-800">{rating}</div>
                 <div className="text-sm text-gray-600">Rating</div>
               </div>
               <div className="p-4 bg-green-50 rounded-xl text-center">
                 <div className="flex items-center justify-center mb-2"><Clock size={20} className="text-green-600" /></div>
-                <div className="text-2xl font-bold text-gray-800">{calculatedHours}</div>
+                <div className="text-2xl font-bold text-gray-800">{totalHours}</div>
                 <div className="text-sm text-gray-600">Total Hours</div>
               </div>
             </div>
 
-            {/* Router buttons */}
+            {/* Payouts button */}
             <button
-              onClick={() => navigate("/settings")}
-              className="w-full flex items-center justify-center space-x-2 p-4 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+              onClick={() => navigate('/payouts')}
+              className="w-full flex items-center justify-between p-4 hover:bg-gray-50 rounded-xl transition-colors"
+            >
+              <div className="flex items-center space-x-3">
+                <Wallet size={20} className="text-gray-600" />
+                <div className="text-left">
+                  <p className="font-medium text-gray-800">Payouts</p>
+                  <p className="text-sm text-gray-600">See your paid shifts by period</p>
+                </div>
+              </div>
+              {/* spacer icon for alignment */}
+              <Settings size={20} className="opacity-0" />
+            </button>
+
+            <button
+              onClick={() => navigate('/settings')}
+              className="mt-3 w-full flex items-center justify-center space-x-2 p-4 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
             >
               <Settings size={20} className="text-gray-600" />
               <span className="text-gray-700 font-medium">Settings</span>

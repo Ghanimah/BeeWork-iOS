@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Globe, Mail, LogOut, ChevronRight, User } from 'lucide-react';
+import { ArrowLeft, Globe, Mail, LogOut, ChevronRight, User, Lock } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
@@ -57,7 +57,7 @@ const SettingsPage: React.FC = () => {
             <div className="card">
               <h2 className="text-lg font-semibold text-gray-800 mb-4">Account</h2>
 
-              {/* NEW: Personal information */}
+              {/* Personal information */}
               <button
                 onClick={() => navigate('/personal-info')}
                 className="w-full flex items-center justify-between p-4 hover:bg-gray-50 rounded-lg transition-colors"
@@ -66,7 +66,22 @@ const SettingsPage: React.FC = () => {
                   <User size={20} className="text-gray-600" />
                   <div className="text-left">
                     <p className="font-medium text-gray-800">Personal information</p>
-                    <p className="text-sm text-gray-600">Cliq alias & phone number</p>
+                    <p className="text-sm text-gray-600">First/Last name, email, Cliq & phone</p>
+                  </div>
+                </div>
+                <ChevronRight size={20} className="text-gray-400" />
+              </button>
+
+              {/* Change password */}
+              <button
+                onClick={() => navigate('/change-password')}
+                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 rounded-lg transition-colors"
+              >
+                <div className="flex items-center space-x-3">
+                  <Lock size={20} className="text-gray-600" />
+                  <div className="text-left">
+                    <p className="font-medium text-gray-800">Change password</p>
+                    <p className="text-sm text-gray-600">Update your sign-in password</p>
                   </div>
                 </div>
                 <ChevronRight size={20} className="text-gray-400" />
