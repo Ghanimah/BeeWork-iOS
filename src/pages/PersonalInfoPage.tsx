@@ -1,3 +1,4 @@
+// src/pages/PersonalInfoPage.tsx
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Save, Lock } from 'lucide-react';
 import { auth, db } from '../firebase';
@@ -8,6 +9,18 @@ import { useNavigate } from 'react-router-dom';
 const emailOk = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim().toLowerCase());
 const nameOk  = (v: string) => v.trim() === '' || /^[\p{L}][\p{L}\p{M}' -]{1,49}$/u.test(v.trim());
 
+// Basic IBAN checker (uppercased, no spaces). Accepts 15–34 alphanumerics, optional stricter JO note below.
+const normalizeIban = (v: string) => v.replace(/\s+/g, '').toUpperCase();
+const ibanOk = (v: string) => {
+  const x = normalizeIban(v);
+  if (x === '') return true; // optional field is ok empty
+  // Generic IBAN length/charset rule:
+  if (!/^[A-Z0-9]{15,34}$/.test(x)) return false;
+  // Optional: if you want to enforce Jordan specifically, uncomment next line (JO + 30 chars total)
+  // if (!/^JO[A-Z0-9]{28}$/.test(x)) return false;
+  return true;
+};
+
 const PersonalInfoPage: React.FC = () => {
   const navigate = useNavigate();
   const [firstName, setFirstName] = useState('');
@@ -16,7 +29,8 @@ const PersonalInfoPage: React.FC = () => {
   const [origEmail, setOrigEmail] = useState('');
   const [password,  setPassword]  = useState(''); // only required if email changes
 
-  const [cliq, setCliq] = useState('');
+  // CHANGED: cliq -> iban
+  const [iban, setIban] = useState('');
   const [phone, setPhone] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -31,7 +45,8 @@ const PersonalInfoPage: React.FC = () => {
         setLastName(d.lastName || '');
         setEmail((d.email || u.email || '').toString());
         setOrigEmail((d.email || u.email || '').toString());
-        setCliq(d.cliq || '');
+        // Prefill from existing iban, or migrate old cliq (if present)
+        setIban(d.iban || d.cliq || '');
         setPhone(d.phone || '');
       } else {
         setEmail(u.email || '');
@@ -49,21 +64,20 @@ const PersonalInfoPage: React.FC = () => {
     if (!nameOk(firstName)) return alert('Enter a valid first name.');
     if (!nameOk(lastName))  return alert('Enter a valid last name.');
     if (!emailOk(email))    return alert('Enter a valid email.');
-    const cliqOk = cliq === '' || /^[a-zA-Z0-9]+$/.test(cliq);
+    if (!ibanOk(iban))      return alert('Enter a valid IBAN (letters & numbers only, 15–34 chars).');
     const phoneOk = phone === '' || /^[0-9]+$/.test(phone);
-    if (!cliqOk)  return alert('Cliq alias should contain letters and numbers only.');
     if (!phoneOk) return alert('Phone should contain digits only.');
 
     try {
       setSaving(true);
 
-      // Update names / extra fields first
+      // Update names / extra fields first (save IBAN uppercased, no spaces)
       await setDoc(
         doc(db, 'users', u.uid),
         {
           firstName: firstName.trim(),
           lastName : lastName.trim(),
-          cliq: cliq.trim(),
+          iban: normalizeIban(iban),
           phone: phone.trim(),
         },
         { merge: true }
@@ -81,7 +95,7 @@ const PersonalInfoPage: React.FC = () => {
 
         await verifyBeforeUpdateEmail(u, newEmail, {
           url: window.location.origin + '/email-updated',
-          handleCodeInApp: false, // simplest flow (Firebase handles the link)
+          handleCodeInApp: false,
         });
 
         // IMPORTANT: do NOT update Firestore email now. It updates after the user clicks the link.
@@ -176,19 +190,21 @@ const PersonalInfoPage: React.FC = () => {
               )}
             </div>
 
-            {/* Cliq */}
+            {/* IBAN */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Cliq alias</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">IBAN</label>
               <input
-                value={cliq}
-                onChange={(e) => setCliq(e.target.value)}
-                placeholder="e.g., amjad123"
+                value={iban}
+                onChange={(e) => setIban(e.target.value)}
+                placeholder="e.g., JO12 3456 7890 1234 5678 9012 3456"
                 className="w-full p-3 border rounded-lg text-black"
                 inputMode="text"
-                autoCapitalize="none"
+                autoCapitalize="characters"
                 autoCorrect="off"
               />
-              <p className="text-xs text-gray-500 mt-1">Letters and numbers only.</p>
+              <p className="text-xs text-gray-500 mt-1">
+                Enter your bank IBAN (letters & numbers only). We’ll format it automatically.
+              </p>
             </div>
 
             {/* Phone */}

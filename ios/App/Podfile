@@ -1,0 +1,30 @@
+require_relative '../../node_modules/@capacitor/ios/scripts/pods_helpers'
+
+platform :ios, '15.0'
+use_frameworks! :linkage => :static
+install! 'cocoapods', :disable_input_output_paths => true
+
+def capacitor_pods
+  pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
+  pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
+
+end
+
+target 'App' do
+  capacitor_pods
+end
+
+post_install do |installer|
+  assertDeploymentTarget(installer)
+
+  # 🔧 Disable Xcode User Script Sandboxing everywhere
+  # (fixes "Operation not permitted" in [CP] script phases)
+  (installer.pods_project.targets +
+   installer.aggregate_targets.map(&:user_project).uniq.flat_map(&:targets)).each do |t|
+    t.build_configurations.each do |cfg|
+      cfg.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] = 'NO'
+      cfg.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+      cfg.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+    end
+  end
+end
