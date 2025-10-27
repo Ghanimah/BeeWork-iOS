@@ -46,7 +46,27 @@ const SignIn: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
       });
       navigate('/');
     } catch (e: any) {
-      setErr(e?.message || 'Sign-in failed.');
+      const code = e?.code as string | undefined;
+      let msg = 'Sign-in failed.';
+      switch (code) {
+        case 'auth/invalid-credential':
+        case 'auth/wrong-password':
+        case 'auth/user-not-found':
+          msg = 'Email or password is incorrect, or the account does not exist in this project.';
+          break;
+        case 'auth/too-many-requests':
+          msg = 'Too many attempts. Please try again later or reset your password.';
+          break;
+        case 'auth/user-disabled':
+          msg = 'This account has been disabled.';
+          break;
+        case 'auth/network-request-failed':
+          msg = 'Network error. Check your connection and try again.';
+          break;
+        default:
+          msg = e?.message || msg;
+      }
+      setErr(msg);
     } finally {
       setBusy(false);
     }

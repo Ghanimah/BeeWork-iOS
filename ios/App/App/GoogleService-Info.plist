@@ -13,7 +13,7 @@
 	<key>PROJECT_ID</key>
 	<string>beework-c9635</string>
 	<key>STORAGE_BUCKET</key>
-	<string>beework-c9635.firebasestorage.app</string>
+	<string>beework-c9635.appspot.com</string>
 	<key>IS_ADS_ENABLED</key>
 	<false/>
 	<key>IS_ANALYTICS_ENABLED</key>
