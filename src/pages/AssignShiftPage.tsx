@@ -159,28 +159,29 @@ const AssignShiftPage: React.FC = () => {
         )}
       </select>
 
-      {(([ 
-        ['title', 'Job Title'],
-        ['location', 'Location'],
-        ['date', 'Date (YYYY-MM-DD)'],
-        ['startTime', 'Start Time (HH:MM)'],
-        ['endTime', 'End Time (HH:MM)'],
-        ['hourlyWage', 'Hourly Wage'],
-        ['latitude', 'Latitude'],
-        ['longitude', 'Longitude'],
-      ] as Array<[keyof FormData, string]>)).map(([field, label]) => {
+      {(([
+        ['title', 'Job Title', 'text'],
+        ['location', 'Location', 'text'],
+        ['date', 'Date (YYYY-MM-DD)', 'date'],
+        ['startTime', 'Start Time (HH:MM)', 'time'],
+        ['endTime', 'End Time (HH:MM)', 'time'],
+        ['hourlyWage', 'Hourly Wage', 'number'],
+        ['latitude', 'Latitude', 'number'],
+        ['longitude', 'Longitude', 'number'],
+      ] as Array<[keyof FormData, string, string]>)).map(([field, label, type]) => {
         const id = `assign-${String(field)}`;
-        const isNumeric = field === 'hourlyWage' || field === 'latitude' || field === 'longitude';
+        const isNumeric = type === 'number';
         return (
           <div key={field} className="mb-3">
             <label htmlFor={id} className="block text-sm font-medium mb-1">{label}</label>
             <input
               id={id}
-              type="text"
+              type={type}
               name={field}
               value={formData[field]}
               onChange={handleChange}
               inputMode={isNumeric ? 'decimal' : undefined}
+              {...(isNumeric ? { step: 'any' } : {})}
               className={`w-full border rounded p-2 ${errors[field] ? 'border-red-500' : 'border-gray-300'}`}
             />
             {errors[field] && <p className="text-xs text-red-600 mt-1">{errors[field]}</p>}
