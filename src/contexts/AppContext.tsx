@@ -1,9 +1,10 @@
 // src/contexts/AppContext.tsx
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from "react";
 import { User, Shift, Availability, Page } from "../types";
 import {
-  collection, onSnapshot, QueryDocumentSnapshot, DocumentData, doc,
-  getDoc, setDoc, updateDoc, serverTimestamp, Timestamp, increment
+  collection, onSnapshot, doc,
+  getDoc, setDoc, updateDoc, serverTimestamp, Timestamp, increment,
+  QueryDocumentSnapshot, DocumentData
 } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { onAuthStateChanged } from "firebase/auth";
@@ -55,6 +56,83 @@ const ymd = (d: Date | null) =>
 function parseCompositeShiftId(virtualId: string) {
   const p = virtualId.split("_");
   return { shiftDocId: p[0], userIdInId: p[1] };
+}
+
+// Helpers to simplify snapshot parsing and cut cognitive complexity
+function toIsoMaybe(v: any): string | null {
+  if (!v) return null;
+  // Firestore Timestamp has toDate(); otherwise treat as string
+  return v.toDate ? v.toDate().toISOString() : String(v);
+}
+
+function computePunchStatus(data: any, docId: string): ShiftPunchStatus {
+  const hasIn = Boolean(data?.punchInAt);
+  const hasOut = Boolean(data?.punchOutAt);
+  let state: PunchState;
+  if (hasOut) {
+    state = "completed";
+  } else if (hasIn) {
+    state = "punched_in";
+  } else {
+    state = "idle";
+  }
+  return {
+    state,
+    activePunchId: docId,
+    punchInAt: toIsoMaybe(data?.punchInAt),
+    punchOutAt: toIsoMaybe(data?.punchOutAt),
+  };
+}
+
+// Map a Firestore shift document to one or more Shift rows
+function mapShiftDoc(d: QueryDocumentSnapshot<DocumentData>): Shift[] {
+  const v: any = d.data();
+  if ("eventName" in v || "companyName" in v) {
+    return mapEventStyleShift(d, v);
+  }
+  if ("userId" in v) {
+    return [mapSimpleShift(d, v)];
+  }
+  return [];
+}
+
+function mapEventStyleShift(d: QueryDocumentSnapshot<DocumentData>, v: any): Shift[] {
+  const start = tsToDate(v.startTS);
+  const end = tsToDate(v.endTS);
+  const lat = v.location?.lat;
+  const lng = v.location?.lng;
+  const title = v.jobTitle ? `${v.companyName} – ${v.jobTitle}` : v.companyName;
+  const dateStr = ymd(start) || "";
+  const assigned: string[] = Array.isArray(v.assigned) ? v.assigned : [];
+  return assigned.map((uid, i) => ({
+    id: `${d.id}_${uid}_${i}`,
+    userId: uid,
+    title,
+    location: v.locationName || "—",
+    date: dateStr,
+    startTime: toISO(start),
+    endTime: toISO(end),
+    hourlyWage: Number(v.rateJOD ?? 0),
+    latitude: Number(lat ?? 0),
+    longitude: Number(lng ?? 0),
+    status: (v.status as Shift["status"]) || "scheduled",
+  }));
+}
+
+function mapSimpleShift(d: QueryDocumentSnapshot<DocumentData>, v: any): Shift {
+  return {
+    id: d.id,
+    userId: v.userId,
+    title: v.title,
+    location: v.location ?? "—",
+    date: v.date ?? "",
+    startTime: typeof v.startTime === "string" ? v.startTime : toISO(tsToDate(v.startTime)),
+    endTime: typeof v.endTime === "string" ? v.endTime : toISO(tsToDate(v.endTime)),
+    hourlyWage: Number(v.hourlyWage ?? 0),
+    latitude: Number(v.latitude ?? 0),
+    longitude: Number(v.longitude ?? 0),
+    status: (v.status as Shift["status"]) || "scheduled",
+  };
 }
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -109,45 +187,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "shifts"), (snap) => {
-      const rows: Shift[] = [];
-      snap.docs.forEach((d: QueryDocumentSnapshot<DocumentData>) => {
-        const v: any = d.data();
-        if ("eventName" in v || "companyName" in v) {
-          const start = tsToDate(v.startTS); const end = tsToDate(v.endTS);
-          const lat = v.location?.lat; const lng = v.location?.lng;
-          const title = v.jobTitle ? `${v.companyName} – ${v.jobTitle}` : v.companyName;
-          const dateStr = ymd(start);
-          (v.assigned || []).forEach((uid: string, i: number) => {
-            rows.push({
-              id: `${d.id}_${uid}_${i}`,
-              userId: uid,
-              title,
-              location: v.locationName || "—",
-              date: dateStr || "",
-              startTime: toISO(start),
-              endTime: toISO(end),
-              hourlyWage: Number(v.rateJOD ?? 0),
-              latitude: Number(lat ?? 0),
-              longitude: Number(lng ?? 0),
-              status: (v.status as Shift["status"]) || "scheduled",
-            });
-          });
-        } else if ("userId" in v) {
-          rows.push({
-            id: d.id,
-            userId: v.userId,
-            title: v.title,
-            location: v.location ?? "—",
-            date: v.date ?? "",
-            startTime: typeof v.startTime === "string" ? v.startTime : toISO(tsToDate(v.startTime)),
-            endTime: typeof v.endTime === "string" ? v.endTime : toISO(tsToDate(v.endTime)),
-            hourlyWage: Number(v.hourlyWage ?? 0),
-            latitude: Number(v.latitude ?? 0),
-            longitude: Number(v.longitude ?? 0),
-            status: (v.status as Shift["status"]) || "scheduled",
-          });
-        }
-      });
+      const rows = snap.docs.flatMap(mapShiftDoc);
       rows.sort((a, b) => (new Date(b.startTime || 0).getTime()) - (new Date(a.startTime || 0).getTime()));
       setShifts(rows);
     });
@@ -162,14 +202,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const ref = doc(db, "shifts", shiftDocId, "punches", punchUserId);
     const unsub = onSnapshot(ref, (snap) => {
       if (!snap.exists()) { setPunchStatus({ state: "idle" }); return; }
-      const d: any = snap.data();
-      const state: PunchState = d.punchOutAt ? "completed" : d.punchInAt ? "punched_in" : "idle";
-      setPunchStatus({
-        state,
-        activePunchId: snap.id,
-        punchInAt: d.punchInAt ? (d.punchInAt.toDate ? d.punchInAt.toDate().toISOString() : String(d.punchInAt)) : null,
-        punchOutAt: d.punchOutAt ? (d.punchOutAt.toDate ? d.punchOutAt.toDate().toISOString() : String(d.punchOutAt)) : null,
-      });
+      setPunchStatus(computePunchStatus(snap.data(), snap.id));
     });
     return () => unsub();
   }, [user.id, selectedShift?.id]);
@@ -202,13 +235,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const updateProfile = (u: Partial<User>) => setUser(prev => ({ ...prev, ...u }));
   const logout = () => { setUser({ ...user, id: "" }); setCurrentPage("home"); };
 
+  const contextValue = useMemo(() => ({
+    user, shifts, availability, currentPage, selectedShift, language,
+    setUser, setShifts, setAvailability, setCurrentPage, setSelectedShift,
+    setLanguage, punchIn, punchOut, updateProfile, logout,
+    punchStatus,
+  }), [user, shifts, availability, currentPage, selectedShift, language, punchStatus]);
+
   return (
-    <AppContext.Provider value={{
-      user, shifts, availability, currentPage, selectedShift, language,
-      setUser, setShifts, setAvailability, setCurrentPage, setSelectedShift,
-      setLanguage, punchIn, punchOut, updateProfile, logout,
-      punchStatus,
-    }}>
+    <AppContext.Provider value={contextValue}>
       {children}
     </AppContext.Provider>
   );

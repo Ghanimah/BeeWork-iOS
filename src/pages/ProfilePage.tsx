@@ -1,103 +1,25 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef } from 'react';
 import { Camera, Star, Clock, Settings, Wallet } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
-import { auth, db } from '../firebase';
-import { doc, getDoc, collectionGroup, getDocs, query, where } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
-
-function clamp(v: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, v));
-}
-
-// Lateness → stars: ≤5 min => 5★; 30 min => 3.5★; beyond 30 drops linearly to 1★ floor.
-function starsForLateness(minLate: number) {
-  if (minLate <= 5) return 5;
-  const r = 5 - 0.06 * (minLate - 5); // 25 mins span reduces 1.5 stars
-  return clamp(r, 1, 5);
-}
 
 const ProfilePage: React.FC = () => {
   const { user, updateProfile } = useApp();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [firstName, setFirstName] = useState('');
-  const [lastName,  setLastName]  = useState('');
-  const [email,     setEmail]     = useState('');
-  const [totalHours, setTotalHours] = useState<number>(0);
-  const [rating, setRating] = useState<number>(5);
-
-  useEffect(() => {
-    const load = async () => {
-      const u = auth.currentUser;
-      if (!u) return;
-
-      // Load profile doc
-      const uDoc = await getDoc(doc(db, 'users', u.uid));
-      if (uDoc.exists()) {
-        const d = uDoc.data() as any;
-        setFirstName(d.firstName || '');
-        setLastName(d.lastName || '');
-        setEmail(d.email || u.email || '');
-        if (typeof d.totalHours === 'number') {
-          setTotalHours(Math.round(d.totalHours * 100) / 100);
-        }
-      } else {
-        setEmail(u.email || '');
-      }
-
-      // Fallback/derivation from punches for hours and rating
-      const punchesQ = query(collectionGroup(db, 'punches'), where('userId', '==', u.uid));
-      const punchSnaps = await getDocs(punchesQ);
-
-      let mins = 0;
-      const latenessStars: number[] = [];
-
-      for (const snap of punchSnaps.docs) {
-        const d = snap.data() as any;
-        if (typeof d.durationMin === 'number') mins += d.durationMin;
-
-        // rating only for completed punches
-        const punchInAt = d?.punchInAt?.toDate?.();
-        const punchOutAt = d?.punchOutAt?.toDate?.();
-        if (!punchInAt || !punchOutAt) continue;
-
-        // parent path: shifts/{shiftId}/punches/{uid}
-        const parts = snap.ref.path.split('/');
-        const shiftId = parts[1];
-        const shiftDoc = await getDoc(doc(db, 'shifts', shiftId));
-        if (!shiftDoc.exists()) continue;
-        const s = shiftDoc.data() as any;
-
-        const schedStart =
-          s?.startTS?.toDate?.() ??
-          s?.startTime?.toDate?.() ??
-          (typeof s?.startTime === 'string' ? new Date(s.startTime) : null);
-
-        if (schedStart) {
-          const lateMin = Math.max(0, Math.round((punchInAt.getTime() - schedStart.getTime()) / 60000));
-          latenessStars.push(starsForLateness(lateMin));
-        }
-      }
-
-      setTotalHours(prev => prev || Math.round((mins / 60) * 100) / 100);
-
-      const avg = latenessStars.length
-        ? Math.round((latenessStars.reduce((a, b) => a + b, 0) / latenessStars.length) * 10) / 10
-        : 5;
-      setRating(avg);
-    };
-
-    load();
-  }, []);
+  const firstName = user.firstName || '';
+  const lastName = user.lastName || '';
+  const email = user.email || '';
+  const rating = typeof user.rating === 'number' ? user.rating : 0;
+  const totalHours = typeof user.totalHours === 'number' ? user.totalHours : 0;
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => updateProfile({ profilePicture: e.target?.result as string });
-      reader.readAsDataURL(file);
-    }
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => updateProfile({ profilePicture: e.target?.result as string });
+    reader.readAsDataURL(file);
   };
 
   return (
@@ -126,6 +48,7 @@ const ProfilePage: React.FC = () => {
                   </div>
                 )}
                 <button
+                  type="button"
                   onClick={() => fileInputRef.current?.click()}
                   className="absolute bottom-0 right-0 p-2 bg-amber-500 rounded-full shadow-lg hover:bg-amber-600 transition-colors"
                 >
@@ -163,6 +86,7 @@ const ProfilePage: React.FC = () => {
 
             {/* Payouts button */}
             <button
+              type="button"
               onClick={() => navigate('/payouts')}
               className="w-full flex items-center justify-between p-4 hover:bg-gray-50 rounded-xl transition-colors"
             >
@@ -178,6 +102,7 @@ const ProfilePage: React.FC = () => {
             </button>
 
             <button
+              type="button"
               onClick={() => navigate('/settings')}
               className="mt-3 w-full flex items-center justify-center space-x-2 p-4 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
             >

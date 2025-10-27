@@ -6,7 +6,8 @@ import { doc, setDoc } from 'firebase/firestore';
 import { useApp } from '../contexts/AppContext';
 
 const emailOk = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim().toLowerCase());
-const nameOk  = (v: string) => /^[\p{L}][\p{L}\p{M}' -]{1,49}$/u.test(v.trim());
+// Name: starts with a letter, then 1-49 of letters/marks/apostrophe/hyphen/space
+const nameOk  = (v: string) => /^\p{L}[\p{L}\p{M}'\- ]{1,49}$/u.test(v.trim());
 const pwOk    = (v: string) => /^(?=.*[A-Za-z])(?=.*\d)[\s\S]{8,64}$/.test(v);
 
 const SignUp: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
@@ -114,7 +115,13 @@ const SignUp: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
 
         <p className="text-sm text-center mt-4 text-black">
           Already have an account?{' '}
-          <span onClick={onSwitch} className="text-blue-600 cursor-pointer underline">Sign In</span>
+          <button
+            type="button"
+            onClick={onSwitch}
+            className="text-blue-600 underline bg-transparent p-0 border-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+          >
+            Sign In
+          </button>
         </p>
       </form>
     </div>

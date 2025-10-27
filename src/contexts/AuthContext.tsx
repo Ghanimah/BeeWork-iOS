@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import React, { createContext, useContext, useEffect, useState, ReactNode, useMemo, useCallback } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
@@ -71,12 +71,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return () => unsubscribe();
   }, []);
 
-  const updateProfile = (updates: Partial<User>) => {
+  const updateProfile = useCallback((updates: Partial<User>) => {
     setUser((prev) => ({ ...prev, ...updates }));
-  };
+  }, []);
+
+  const value = useMemo(() => ({ user, setUser, updateProfile }), [user, updateProfile]);
 
   return (
-    <AuthContext.Provider value={{ user, setUser, updateProfile }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

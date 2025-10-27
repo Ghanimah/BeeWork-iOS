@@ -117,7 +117,13 @@ const SignIn: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
 
         <p className="text-sm text-center mt-4 text-black">
           Don’t have an account?{' '}
-          <span onClick={onSwitch} className="text-blue-600 cursor-pointer underline">Sign Up</span>
+          <button
+            type="button"
+            onClick={onSwitch}
+            className="text-blue-600 underline bg-transparent p-0 border-0 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded"
+          >
+            Sign Up
+          </button>
         </p>
       </form>
     </div>

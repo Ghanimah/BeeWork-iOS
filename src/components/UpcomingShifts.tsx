@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import { MapPin, Clock, DollarSign, Play } from "lucide-react";
 import { useApp } from "../contexts/AppContext";
 import BeeIcon from "./BeeIcon";
@@ -52,8 +52,10 @@ const UpcomingShifts: React.FC<UpcomingShiftsProps> = ({ shifts }) => {
       <h3 className="text-lg font-bold text-gray-800 mb-4">Upcoming Shifts</h3>
 
       {nextShift ? (
-        <div
-          className="card cursor-pointer hover:shadow-xl transition-shadow duration-200"
+        <button
+          type="button"
+          aria-label="Open next shift details"
+          className="card text-left cursor-pointer hover:shadow-xl transition-shadow duration-200"
           onClick={handleShiftClick}
         >
           <div className="flex items-center justify-between mb-4">
@@ -98,7 +100,7 @@ const UpcomingShifts: React.FC<UpcomingShiftsProps> = ({ shifts }) => {
               </span>
             </div>
           </div>
-        </div>
+        </button>
       ) : (
         <div className="card text-center py-8">
           <BeeIcon size={48} className="text-gray-300 mx-auto mb-4" />

@@ -1,5 +1,5 @@
 // src/pages/PayoutsPage.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, CalendarDays, Coins, Clock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { auth, db } from "../firebase";
@@ -35,24 +35,23 @@ const asNumber=(v:any)=>Number.isFinite(Number(v))?Number(v):0;
 const asDate=(v:any):Date|undefined=>{
   if(!v) return;
   if(v instanceof Date) return v;
-  if(typeof v?.toDate==="function"){ const d=v.toDate(); return isNaN(+d)?undefined:d; }
+  if(typeof v?.toDate==="function"){ const d=v.toDate(); return Number.isNaN(+d)?undefined:d; }
   if(typeof v==="string"){
     let d = new Date(v);
-    if(!isNaN(+d)) return d;
+    if(!Number.isNaN(+d)) return d;
     // try to normalize " at " + "UTC+3" -> " GMT+0300"
     let s=v.replace(" at "," ");
-    const m = s.match(/UTC([+-]?\d{1,2})/i);
+    const m = /UTC([+-]?\d{1,2})/i.exec(s);
     if(m){
-      const h = parseInt(m[1],10);
+      const h = Number.parseInt(m[1],10);
       const sign = h>=0?"+":"-";
       const abs = Math.abs(h);
       const gmt = `GMT${sign}${pad2(abs)}00`;
       s = s.replace(/UTC[+-]?\d{1,2}/i, gmt);
     }
     d = new Date(s);
-    if(!isNaN(+d)) return d;
+    if(!Number.isNaN(+d)) return d;
   }
-  return;
 };
 
 export default function PayoutsPage(){
@@ -65,96 +64,107 @@ export default function PayoutsPage(){
   const periodEndEx = useMemo(()=>endOfPeriod(periodStart),[periodStart]);
   const periodLabel = useMemo(()=>fmtRange(periodStart,periodEndEx),[periodStart,periodEndEx]);
   const candidateKeys = useMemo(()=>[ymd(addDays(periodStart,-1)), ymd(periodStart), ymd(addDays(periodStart,1))],[periodStart]);
-  const canGoNext = weeksBack>0;
+
+  // Helpers extracted to reduce cognitive complexity
+  const fetchTimesheetDocs = async (uId: string, keys: string[]) => {
+    try{
+      const qTs = query(
+        collection(db,"timesheets"),
+        where("employeeId","==",uId),
+        where("weekThursISO","in", keys)
+      );
+      const snap = await getDocs(qTs);
+      return snap.docs;
+    }catch{
+      const all:any[] = [];
+      for(const k of keys){
+        const qTs = query(collection(db,"timesheets"), where("employeeId","==",uId), where("weekThursISO","==",k));
+        const s = await getDocs(qTs);
+        all.push(...s.docs);
+      }
+      return all;
+    }
+  };
+
+  const addBreakdownRows = (d:any, docId:string, out: Row[]) => {
+    let i = 0;
+    for (const b of d.breakdown as any[]) {
+      const hours = asNumber(b.totalHours ?? b.hours);
+      const company = b.companyName ?? d.companyName ?? "Shift";
+      const campaign = b.campaignName ?? b.campaign ?? d.campaign ?? "";
+      const location = b.locationName ?? (typeof b.location==="string"? b.location : d.locationName ?? d.location ?? "");
+      const dt = asDate(b.date) ?? asDate(b.start) ?? asDate(b.eventStart) ?? asDate(b.end) ?? asDate(b.eventEnd);
+      const amountRaw = (b.totalPayJOD ?? b.payJOD ?? b.amountJOD);
+      const amount = asNumber(amountRaw ?? (hours * asNumber(b.rateJOD ?? d.rateJOD)));
+      if(hours>0 || amount>0){
+        out.push({
+          id:`${docId}_${i}`,
+          company, campaign, location,
+          dateStr: dt ? dt.toLocaleDateString() : "",
+          hours: Math.round(hours*100)/100,
+          amount: Math.round(amount*100)/100
+        });
+      }
+      i++;
+    }
+  };
+
+  const weeklyRowFromDoc = async (d:any, docId:string): Promise<Row> => {
+    const totalHours = asNumber(d.totalHours);
+    let amount: number;
+    if (d.totalPayJOD === undefined) {
+      amount = totalHours * asNumber(d.rateJOD);
+    } else {
+      amount = asNumber(d.totalPayJOD);
+    }
+    let company = d.companyName ?? "Week Total";
+    let campaign = d.campaign ?? "";
+    let location = d.locationName ?? d.location ?? "";
+    if(d.shiftId){
+      try{
+        const sSnap = await getDoc(doc(db,"shifts", String(d.shiftId)));
+        if(sSnap.exists()){
+          const s:any = sSnap.data();
+          company = s.companyName || s.eventName || company;
+          campaign = s.campaign || campaign;
+          location = location || s.locationName || "";
+        }
+      }catch{}
+    }
+    const st = asDate(d.start) ?? asDate(d.eventStart);
+    return {
+      id: docId,
+      company, campaign, location,
+      dateStr: st ? st.toLocaleDateString() : "",
+      hours: Math.round(totalHours*100)/100,
+      amount: Math.round(asNumber(amount)*100)/100
+    };
+  };
+
+  const loadRows = async (uId:string, keys:string[]) => {
+    const out: Row[] = [];
+    const seen = new Set<string>();
+    const docs = await fetchTimesheetDocs(uId, keys);
+    for(const docSnap of docs){
+      if(seen.has(docSnap.id)) { continue; }
+      seen.add(docSnap.id);
+      const d:any = docSnap.data();
+      if(Array.isArray(d.breakdown) && d.breakdown.length){
+        addBreakdownRows(d, docSnap.id, out);
+        continue;
+      }
+      const row = await weeklyRowFromDoc(d, docSnap.id);
+      out.push(row);
+    }
+    out.sort((a,b)=>(a.dateStr||"").localeCompare(b.dateStr||""));
+    return out;
+  };
 
   useEffect(()=>{ (async()=>{
     const u = auth.currentUser; if(!u) return;
     setLoading(true);
-
-    const out: Row[] = [];
-    const seen = new Set<string>();
-
-    // Prefer indexed compound query: my docs in this period (±1 day)
-    // Falls back to three separate queries if 'in' is not available.
-    const runQuery = async (keys: string[])=>{
-      try{
-        const qTs = query(
-          collection(db,"timesheets"),
-          where("employeeId","==",u.uid),
-          where("weekThursISO","in", keys)
-        );
-        return await getDocs(qTs);
-      }catch{
-        // fallback: run three queries
-        const all:any[] = [];
-        for(const k of keys){
-          const qTs = query(collection(db,"timesheets"), where("employeeId","==",u.uid), where("weekThursISO","==",k));
-          const s = await getDocs(qTs);
-          all.push(...s.docs);
-        }
-        return { docs: all } as any;
-      }
-    };
-
-    const snap = await runQuery(candidateKeys);
-
-    for(const docSnap of snap.docs){
-      if(seen.has(docSnap.id)) continue; seen.add(docSnap.id);
-      const d:any = docSnap.data();
-
-      // Primary: per-shift breakdown
-      if(Array.isArray(d.breakdown) && d.breakdown.length){
-        d.breakdown.forEach((b:any, i:number)=>{
-          const hours = asNumber(b.totalHours ?? b.hours);
-          const company = b.companyName ?? d.companyName ?? "Shift";
-          const campaign = b.campaignName ?? b.campaign ?? d.campaign ?? "";
-          const location = b.locationName ?? (typeof b.location==="string"? b.location : d.locationName ?? d.location ?? "");
-          const dt = asDate(b.date) ?? asDate(b.start) ?? asDate(b.eventStart) ?? asDate(b.end) ?? asDate(b.eventEnd);
-          const amountRaw = (b.totalPayJOD ?? b.payJOD ?? b.amountJOD);
-          const amount = asNumber(amountRaw ?? (hours * asNumber(b.rateJOD ?? d.rateJOD)));
-
-          if(hours>0 || amount>0){
-            out.push({
-              id:`${docSnap.id}_${i}`,
-              company, campaign, location,
-              dateStr: dt ? dt.toLocaleDateString() : "",
-              hours: Math.round(hours*100)/100,
-              amount: Math.round(amount*100)/100
-            });
-          }
-        });
-        continue;
-      }
-
-      // Fallback: single weekly row
-      const totalHours = asNumber(d.totalHours);
-      let amount = d.totalPayJOD !== undefined ? asNumber(d.totalPayJOD) : totalHours * asNumber(d.rateJOD);
-      let company = d.companyName ?? "Week Total";
-      let campaign = d.campaign ?? "";
-      let location = d.locationName ?? d.location ?? "";
-      if(d.shiftId){
-        try{
-          const sSnap = await getDoc(doc(db,"shifts", String(d.shiftId)));
-          if(sSnap.exists()){
-            const s:any = sSnap.data();
-            company = s.companyName || s.eventName || company;
-            campaign = s.campaign || campaign;
-            location = location || s.locationName || "";
-          }
-        }catch{}
-      }
-      const st = asDate(d.start) ?? asDate(d.eventStart);
-      out.push({
-        id: docSnap.id,
-        company, campaign, location,
-        dateStr: st ? st.toLocaleDateString() : "",
-        hours: Math.round(totalHours*100)/100,
-        amount: Math.round(asNumber(amount)*100)/100
-      });
-    }
-
-    out.sort((a,b)=>(a.dateStr||"").localeCompare(b.dateStr||""));
-    setRows(out);
+    const nextRows = await loadRows(u.uid, candidateKeys);
+    setRows(nextRows);
     setLoading(false);
   })(); },[candidateKeys.join("|")]);
 
@@ -198,31 +208,50 @@ export default function PayoutsPage(){
 
       <div className="px-4 py-4 max-w-md mx-auto">
         <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm">
-          {loading ? (
-            <div className="p-4 space-y-3">{[...Array(4)].map((_,i)=>(<div key={i} className="animate-pulse">
-              <div className="h-4 bg-gray-200 rounded w-1/3 mb-2"/><div className="h-3 bg-gray-100 rounded w-1/2 mb-1.5"/><div className="h-3 bg-gray-100 rounded w-2/3"/></div>))}</div>
-          ) : rows.length===0 ? (
-            <div className="py-10 text-center"><div className="text-sm font-semibold text-gray-900">No completed shifts</div><div className="text-xs text-gray-500">Nothing finished in this period</div></div>
-          ) : (
-            <div className="divide-y divide-gray-200">
-              {rows.map(r=>(
-                <div key={r.id} className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-semibold text-gray-900">{r.company}</div>
-                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
-                        {r.location && <span className="inline-flex items-center gap-1"><MapPin size={12}/><span className="truncate">{r.location}</span></span>}
-                        {r.dateStr && <span className="inline-flex items-center gap-1"><CalendarDays size={12}/> {r.dateStr}</span>}
-                        <span className="inline-flex items-center gap-1"><Clock size={12}/> {r.hours.toFixed(2)} h</span>
-                      </div>
+          {(() => {
+            const skeletonKeys = ["a","b","c","d"];
+            if (loading) {
+              return (
+                <div className="p-4 space-y-3">
+                  {skeletonKeys.map((k)=>(
+                    <div key={k} className="animate-pulse">
+                      <div className="h-4 bg-gray-200 rounded w-1/3 mb-2"/>
+                      <div className="h-3 bg-gray-100 rounded w-1/2 mb-1.5"/>
+                      <div className="h-3 bg-gray-100 rounded w-2/3"/>
                     </div>
-                    <div className="whitespace-nowrap text-base font-bold text-gray-900">{currency(r.amount)}</div>
-                  </div>
-                  {r.campaign && <div className="mt-1 text-xs text-gray-600">{r.campaign}</div>}
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
+              );
+            }
+            if (rows.length === 0) {
+              return (
+                <div className="py-10 text-center">
+                  <div className="text-sm font-semibold text-gray-900">No completed shifts</div>
+                  <div className="text-xs text-gray-500">Nothing finished in this period</div>
+                </div>
+              );
+            }
+            return (
+              <div className="divide-y divide-gray-200">
+                {rows.map(r=> (
+                  <div key={r.id} className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-semibold text-gray-900">{r.company}</div>
+                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
+                          {r.location && <span className="inline-flex items-center gap-1"><MapPin size={12}/><span className="truncate">{r.location}</span></span>}
+                          {r.dateStr && <span className="inline-flex items-center gap-1"><CalendarDays size={12}/> {r.dateStr}</span>}
+                          <span className="inline-flex items-center gap-1"><Clock size={12}/> {r.hours.toFixed(2)} h</span>
+                        </div>
+                      </div>
+                      <div className="whitespace-nowrap text-base font-bold text-gray-900">{currency(r.amount)}</div>
+                    </div>
+                    {r.campaign && <div className="mt-1 text-xs text-gray-600">{r.campaign}</div>}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </div>
 
         <div className="mt-4 grid grid-cols-2 gap-2">

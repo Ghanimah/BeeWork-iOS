@@ -13,7 +13,7 @@ const ChangePasswordPage: React.FC = () => {
 
   const handleSave = async () => {
     const user = auth.currentUser;
-    if (!user || !user.email) return alert("You need to be signed in.");
+    if (!user?.email) return alert("You need to be signed in.");
 
     if (newPassword.length < 6) return alert("New password must be at least 6 characters.");
     if (newPassword !== confirmPassword) return alert("New passwords do not match.");
@@ -30,12 +30,18 @@ const ChangePasswordPage: React.FC = () => {
 
       alert("Password updated successfully. Use your new password next time you sign in.");
       navigate("/settings");
-    } catch (e: any) {
-      const msg =
-        e?.code === "auth/wrong-password" ? "Current password is incorrect."
-        : e?.code === "auth/weak-password" ? "New password is too weak."
-        : e?.code === "auth/requires-recent-login" ? "Please sign in again and retry."
-        : e?.message || "Failed to update password. Please try again.";
+    } catch (e: unknown) {
+      const err = e as { code?: string; message?: string } | undefined;
+      let msg = "Failed to update password. Please try again.";
+      if (err?.code === "auth/wrong-password") {
+        msg = "Current password is incorrect.";
+      } else if (err?.code === "auth/weak-password") {
+        msg = "New password is too weak.";
+      } else if (err?.code === "auth/requires-recent-login") {
+        msg = "Please sign in again and retry.";
+      } else if (err?.message) {
+        msg = err.message;
+      }
       alert(msg);
     } finally {
       setSaving(false);
@@ -55,11 +61,12 @@ const ChangePasswordPage: React.FC = () => {
 
           <div className="card space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Current password</label>
+              <label htmlFor="cp-current" className="block text-sm font-medium text-gray-700 mb-1">Current password</label>
               <div className="flex items-center gap-2">
                 <Lock size={16} className="text-gray-500" />
                 <input
                   type="password"
+                  id="cp-current"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   placeholder="Enter current password"
@@ -70,9 +77,10 @@ const ChangePasswordPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">New password</label>
+              <label htmlFor="cp-new" className="block text-sm font-medium text-gray-700 mb-1">New password</label>
               <input
                 type="password"
+                id="cp-new"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Enter new password"
@@ -83,9 +91,10 @@ const ChangePasswordPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Confirm new password</label>
+              <label htmlFor="cp-confirm" className="block text-sm font-medium text-gray-700 mb-1">Confirm new password</label>
               <input
                 type="password"
+                id="cp-confirm"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Re-enter new password"

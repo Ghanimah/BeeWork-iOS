@@ -7,10 +7,13 @@ import { EmailAuthProvider, reauthenticateWithCredential, verifyBeforeUpdateEmai
 import { useNavigate } from 'react-router-dom';
 
 const emailOk = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim().toLowerCase());
-const nameOk  = (v: string) => v.trim() === '' || /^[\p{L}][\p{L}\p{M}' -]{1,49}$/u.test(v.trim());
+// Name may be empty (optional). If provided: start with a letter, then letters/marks/apostrophe/hyphen/space up to 50 total.
+const nameOk  = (v: string) => v.trim() === '' || /^\p{L}[\p{L}\p{M}'\- ]{1,49}$/u.test(v.trim());
 
 // Basic IBAN checker (uppercased, no spaces). Accepts 15–34 alphanumerics, optional stricter JO note below.
-const normalizeIban = (v: string) => v.replace(/\s+/g, '').toUpperCase();
+// Prefer String#replaceAll when available; otherwise use split/join to avoid regex replace smells.
+const replaceAllCompat = (s: string, re: RegExp, repl: string) => ((s as any).replaceAll?.(re, repl)) ?? s.split(re).join(repl);
+const normalizeIban = (v: string) => replaceAllCompat(v, /\s+/g, '').toUpperCase();
 const ibanOk = (v: string) => {
   const x = normalizeIban(v);
   if (x === '') return true; // optional field is ok empty
@@ -56,61 +59,73 @@ const PersonalInfoPage: React.FC = () => {
     load();
   }, []);
 
+  // --- helpers to reduce cognitive complexity ---
+  const validateInputs = (): string | null => {
+    if (!nameOk(firstName)) return 'Enter a valid first name.';
+    if (!nameOk(lastName)) return 'Enter a valid last name.';
+    if (!emailOk(email)) return 'Enter a valid email.';
+    if (!ibanOk(iban)) return 'Enter a valid IBAN (letters & numbers only, 15–34 chars).';
+    const phoneOk = phone === '' || /^\d+$/.test(phone);
+    if (!phoneOk) return 'Phone should contain digits only.';
+    return null;
+  };
+
+  const persistBasics = async (uid: string) => {
+    await setDoc(
+      doc(db, 'users', uid),
+      {
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        iban: normalizeIban(iban),
+        phone: phone.trim(),
+      },
+      { merge: true }
+    );
+  };
+
+  const handleEmailChange = async (u: any, newEmail: string) => {
+    if (!password) {
+      setSaving(false);
+      alert('Please enter your current password to confirm email change.');
+      return;
+    }
+    const cred = EmailAuthProvider.credential(origEmail, password);
+    await reauthenticateWithCredential(u, cred);
+    await verifyBeforeUpdateEmail(u, newEmail, {
+      url: (globalThis.location?.origin ?? '') + '/email-updated',
+      handleCodeInApp: false,
+    });
+    alert('We sent a confirmation link to the new email. Open it to finish the change.');
+  };
+
   const save = async () => {
     const u = auth.currentUser;
     if (!u) return;
-
-    // basic validations
-    if (!nameOk(firstName)) return alert('Enter a valid first name.');
-    if (!nameOk(lastName))  return alert('Enter a valid last name.');
-    if (!emailOk(email))    return alert('Enter a valid email.');
-    if (!ibanOk(iban))      return alert('Enter a valid IBAN (letters & numbers only, 15–34 chars).');
-    const phoneOk = phone === '' || /^[0-9]+$/.test(phone);
-    if (!phoneOk) return alert('Phone should contain digits only.');
-
+    const err = validateInputs();
+    if (err) { alert(err); return; }
     try {
       setSaving(true);
-
-      // Update names / extra fields first (save IBAN uppercased, no spaces)
-      await setDoc(
-        doc(db, 'users', u.uid),
-        {
-          firstName: firstName.trim(),
-          lastName : lastName.trim(),
-          iban: normalizeIban(iban),
-          phone: phone.trim(),
-        },
-        { merge: true }
-      );
-
-      // If email changed → reauth + send verification link to new email.
+      await persistBasics(u.uid);
       const newEmail = email.trim().toLowerCase();
-      if (newEmail !== origEmail) {
-        if (!password) {
-          setSaving(false);
-          return alert('Please enter your current password to confirm email change.');
-        }
-        const cred = EmailAuthProvider.credential(origEmail, password);
-        await reauthenticateWithCredential(u, cred);
-
-        await verifyBeforeUpdateEmail(u, newEmail, {
-          url: window.location.origin + '/email-updated',
-          handleCodeInApp: false,
-        });
-
-        // IMPORTANT: do NOT update Firestore email now. It updates after the user clicks the link.
-        alert('We sent a confirmation link to the new email. Open it to finish the change.');
-      } else {
+      if (newEmail === origEmail) {
         alert('Saved!');
+        navigate('/settings');
+        return;
       }
-
+      await handleEmailChange(u, newEmail);
       navigate('/settings');
-    } catch (e: any) {
-      const msg =
-        e?.code === 'auth/requires-recent-login' ? 'Please re-enter your password and try again.'
-      : e?.code === 'auth/email-already-in-use' ? 'This email is already in use.'
-      : e?.code === 'auth/operation-not-allowed' ? 'Email change requires verification. Please use the link we send.'
-      : e?.message || 'Failed to save. Please try again.';
+    } catch (e: unknown) {
+      const errObj = e as { code?: string; message?: string } | undefined;
+      let msg = 'Failed to save. Please try again.';
+      if (errObj?.code === 'auth/requires-recent-login') {
+        msg = 'Please re-enter your password and try again.';
+      } else if (errObj?.code === 'auth/email-already-in-use') {
+        msg = 'This email is already in use.';
+      } else if (errObj?.code === 'auth/operation-not-allowed') {
+        msg = 'Email change requires verification. Please use the link we send.';
+      } else if (errObj?.message) {
+        msg = errObj.message;
+      }
       alert(msg);
     } finally {
       setSaving(false);
@@ -134,8 +149,9 @@ const PersonalInfoPage: React.FC = () => {
             {/* First / Last */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">First name</label>
+                <label htmlFor="pi-first" className="block text-sm font-medium text-gray-700 mb-1">First name</label>
                 <input
+                  id="pi-first"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   placeholder="First name"
@@ -145,8 +161,9 @@ const PersonalInfoPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Last name</label>
+                <label htmlFor="pi-last" className="block text-sm font-medium text-gray-700 mb-1">Last name</label>
                 <input
+                  id="pi-last"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   placeholder="Last name"
@@ -159,8 +176,9 @@ const PersonalInfoPage: React.FC = () => {
 
             {/* Email */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <label htmlFor="pi-email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
               <input
+                id="pi-email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@example.com"
@@ -171,11 +189,12 @@ const PersonalInfoPage: React.FC = () => {
               />
               {emailChanged && (
                 <div className="mt-3">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Confirm with password</label>
+                  <label htmlFor="pi-password" className="block text-sm font-medium text-gray-700 mb-1">Confirm with password</label>
                   <div className="flex items-center gap-2">
                     <Lock size={16} className="text-gray-500" />
                     <input
                       type="password"
+                      id="pi-password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="Current password"
@@ -192,8 +211,9 @@ const PersonalInfoPage: React.FC = () => {
 
             {/* IBAN */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">IBAN</label>
+              <label htmlFor="pi-iban" className="block text-sm font-medium text-gray-700 mb-1">IBAN</label>
               <input
+                id="pi-iban"
                 value={iban}
                 onChange={(e) => setIban(e.target.value)}
                 placeholder="e.g., JO12 3456 7890 1234 5678 9012 3456"
@@ -209,14 +229,15 @@ const PersonalInfoPage: React.FC = () => {
 
             {/* Phone */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Phone number</label>
+              <label htmlFor="pi-phone" className="block text-sm font-medium text-gray-700 mb-1">Phone number</label>
               <input
+                id="pi-phone"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, ''))}
+                onChange={(e) => setPhone(replaceAllCompat(e.target.value, /\D+/g, ''))}
                 placeholder="07XXXXXXXX"
                 className="w-full p-3 border rounded-lg text-black"
                 inputMode="numeric"
-                pattern="[0-9]*"
+                pattern="\d*"
               />
               <p className="text-xs text-gray-500 mt-1">Digits only.</p>
             </div>

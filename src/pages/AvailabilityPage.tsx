@@ -11,6 +11,7 @@ const AvailabilityPage: React.FC = () => {
   const today = new Date();
   const isFriday = today.getDay() === 5;
   const canEdit = isFriday;
+  const isDisabled = !canEdit;
 
   // Reordered to start from Sunday
   const days = [
@@ -121,14 +122,15 @@ const AvailabilityPage: React.FC = () => {
                         type="checkbox"
                         checked={dayAvailability?.available || false}
                         onChange={(e) => handleAvailabilityChange(key, e.target.checked)}
-                        disabled={!canEdit}
+                        disabled={isDisabled}
                         className="sr-only peer"
                       />
+                      <span className="sr-only">Toggle availability for {label}</span>
                       <div className={`w-11 h-6 rounded-full peer transition-colors ${
                         dayAvailability?.available
                           ? 'bg-green-500'
                           : 'bg-gray-300'
-                      } ${!canEdit ? 'opacity-50' : ''}`}>
+                      } ${canEdit ? '' : 'opacity-50'}`}>
                         <div className={`w-5 h-5 bg-white rounded-full shadow transform transition-transform ${
                           dayAvailability?.available ? 'translate-x-5' : 'translate-x-0'
                         } mt-0.5 ml-0.5`}></div>
@@ -139,36 +141,38 @@ const AvailabilityPage: React.FC = () => {
                   {dayAvailability?.available && (
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label htmlFor={`${key}-start`} className="block text-sm font-medium text-gray-700 mb-2">
                           Start Time
                         </label>
                         <div className="relative">
                           <Clock size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                           <input
                             type="time"
+                            id={`${key}-start`}
                             value={dayAvailability.startTime || '09:00'}
                             onChange={(e) => handleTimeChange(key, 'startTime', e.target.value)}
-                            disabled={!canEdit}
+                            disabled={isDisabled}
                             className={`w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
-                              !canEdit ? 'bg-gray-50 text-gray-500' : ''
+                              canEdit ? '' : 'bg-gray-50 text-gray-500'
                             }`}
                           />
                         </div>
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label htmlFor={`${key}-end`} className="block text-sm font-medium text-gray-700 mb-2">
                           End Time
                         </label>
                         <div className="relative">
                           <Clock size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                           <input
                             type="time"
+                            id={`${key}-end`}
                             value={dayAvailability.endTime || '17:00'}
                             onChange={(e) => handleTimeChange(key, 'endTime', e.target.value)}
-                            disabled={!canEdit}
+                            disabled={isDisabled}
                             className={`w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
-                              !canEdit ? 'bg-gray-50 text-gray-500' : ''
+                              canEdit ? '' : 'bg-gray-50 text-gray-500'
                             }`}
                           />
                         </div>

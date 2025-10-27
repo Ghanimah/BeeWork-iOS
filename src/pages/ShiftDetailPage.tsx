@@ -6,6 +6,32 @@ import { useApp } from "../contexts/AppContext";
 const METERS_RADIUS = 500;
 const TAX_RATE = 0.05;
 
+const getDistance = (lat1:number, lon1:number, lat2:number, lon2:number) => {
+  const R = 6371e3, toRad = (d:number)=>d*Math.PI/180;
+  const dLat = toRad(lat2-lat1), dLon = toRad(lon2-lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+};
+
+const formatTimer = (startMs: number | null, nowMs: number): string | null => {
+  if (!startMs) return null;
+  const secs = Math.max(0, Math.floor((nowMs - startMs) / 1000));
+  const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60;
+  return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+};
+
+const getDistanceNote = (distM: number | null, hasCoords: boolean): string => {
+  if (distM !== null && distM !== undefined) return `You are ~${distM.toFixed(0)} m from site`;
+  if (hasCoords) return "—";
+  return "Location not set for this shift";
+};
+
+const getEffectiveStatus = (shiftStatus: string | undefined, punchState: string): "scheduled" | "in-progress" | "completed" => {
+  if (punchState === "completed") return "completed";
+  if (punchState === "punched_in") return "in-progress";
+  return (shiftStatus ?? "scheduled") as "scheduled" | "in-progress" | "completed";
+};
+
 const ShiftDetailPage: React.FC = () => {
   const { selectedShift, setCurrentPage, setSelectedShift, punchIn, punchOut, punchStatus } = useApp();
   const [now, setNow] = useState(Date.now());
@@ -13,62 +39,58 @@ const ShiftDetailPage: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [punchStartMs, setPunchStartMs] = useState<number | null>(null);
   const askedRef = useRef(false);
-  if (!selectedShift) return null;
+  const shift = selectedShift;
 
   const fmtTimeHM = (d?: string) => d ? new Date(d).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "--:--";
   const fmtDate = (d?: string) => d ? new Date(d).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }) : "";
   const fmtMoney = (n: number) => new Intl.NumberFormat(undefined, { style: "currency", currency: "JOD", maximumFractionDigits: 2 }).format(n);
 
-  const startTs = selectedShift.startTime ? new Date(selectedShift.startTime).getTime() : null;
-  const endTs = selectedShift.endTime ? new Date(selectedShift.endTime).getTime() : null;
-
-  const effectiveStatus: "scheduled" | "in-progress" | "completed" =
-    punchStatus.state === "completed" ? "completed" :
-    punchStatus.state === "punched_in" ? "in-progress" :
-    selectedShift.status;
+  const startTs = shift?.startTime ? new Date(shift.startTime).getTime() : null;
+  const endTs = shift?.endTime ? new Date(shift.endTime).getTime() : null;
+  const effectiveStatus = getEffectiveStatus(shift?.status, punchStatus.state);
 
   const workedHours = useMemo(() => {
     const start = startTs;
-    const end = effectiveStatus === "in-progress" ? now : endTs ? endTs : null;
+    const end = effectiveStatus === "in-progress" ? now : (endTs ?? null);
     if (!start || !end) return 0;
     return Math.max(0, (end - start) / 3_600_000);
   }, [startTs, endTs, effectiveStatus, now]);
 
   const scheduledHours = useMemo(() => (!startTs || !endTs) ? 0 : Math.max(0, (endTs - startTs) / 3_600_000), [startTs, endTs]);
-  const basePay = (selectedShift.hourlyWage || 0) * scheduledHours;
+  const basePay = ((shift?.hourlyWage ?? 0)) * scheduledHours;
   const tax = basePay * TAX_RATE;
-  const total = Math.max(0, basePay - tax);
 
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
   useEffect(() => {
-    const src = punchStatus.punchInAt || (selectedShift as any).punchedInAt;
+    const src = punchStatus.punchInAt || (shift as any)?.punchedInAt;
     if (effectiveStatus === "in-progress" && src) setPunchStartMs(new Date(src).getTime());
     if (effectiveStatus !== "in-progress") setPunchStartMs(null);
   }, [effectiveStatus, punchStatus.punchInAt]);
 
-  const getDistance = (lat1:number, lon1:number, lat2:number, lon2:number) => {
-    const R = 6371e3, toRad = (d:number)=>d*Math.PI/180;
-    const dLat = toRad(lat2-lat1), dLon = toRad(lon2-lon1);
-    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
-    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
-  };
-
-  const hasCoords = typeof selectedShift.latitude === "number" && typeof selectedShift.longitude === "number";
+  const hasCoords = !!(shift && typeof shift.latitude === "number" && typeof shift.longitude === "number");
   const refreshDistance = () => {
-    if (!("geolocation" in navigator) || !hasCoords) return;
+    if (!("geolocation" in navigator) || !hasCoords || !shift) return;
     navigator.geolocation.getCurrentPosition(
-      (pos) => setDistM(getDistance(pos.coords.latitude, pos.coords.longitude, selectedShift.latitude as number, selectedShift.longitude as number)),
+      (pos) => setDistM(getDistance(pos.coords.latitude, pos.coords.longitude, shift.latitude, shift.longitude)),
       () => {}
     );
   };
   useEffect(() => { if (!askedRef.current) { askedRef.current = true; refreshDistance(); } }, []);
 
   const requireNearby = async (cb: () => Promise<void> | void) => {
-    if (!hasCoords) { if (!busy) setBusy(true); try { await cb(); } finally { setBusy(false); } return; }
+    if (!hasCoords || !shift) { 
+      if (!busy) setBusy(true); 
+      try { 
+        await cb(); 
+      } finally { 
+        setBusy(false); 
+      } 
+      return; 
+    }
     setBusy(true);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
-        const d = getDistance(pos.coords.latitude, pos.coords.longitude, selectedShift.latitude as number, selectedShift.longitude as number);
+        const d = getDistance(pos.coords.latitude, pos.coords.longitude, shift.latitude, shift.longitude);
         setDistM(d);
         if (d <= METERS_RADIUS) { try { await cb(); } finally { setBusy(false); } }
         else { alert(`You must be within ${METERS_RADIUS} meters of the job site. You are ~${d.toFixed(0)}m away.`); setBusy(false); }
@@ -83,17 +105,19 @@ const ShiftDetailPage: React.FC = () => {
     if (!startTs || !endTs) { alert("Shift start and end times are not set yet."); return; }
     if (nowTs < startTs) { alert("You cannot punch in before the scheduled start time."); return; }
     if (nowTs > endTs) { alert("You cannot punch in after the scheduled end time."); return; }
-    requireNearby(async () => { await punchIn(selectedShift.id); setSelectedShift({ ...selectedShift, status: "in-progress" }); });
+    if (!shift) return;
+    requireNearby(async () => { await punchIn(shift.id); setSelectedShift({ ...shift, status: "in-progress" }); });
   };
-  const handlePunchOut = () => requireNearby(async () => { await punchOut(selectedShift.id); setSelectedShift({ ...selectedShift, status: "completed" }); });
+  const handlePunchOut = () => { 
+    if (!shift) return; 
+    requireNearby(async () => { 
+      await punchOut(shift.id); 
+      setSelectedShift({ ...shift, status: "completed" }); 
+    }); 
+  };
 
-  const timerText = (() => {
-    const start = punchStartMs;
-    if (!start) return null;
-    const secs = Math.max(0, Math.floor((now - start) / 1000));
-    const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), s = secs % 60;
-    return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
-  })();
+  const timerText = formatTimer(punchStartMs, now);
+  const distanceNote = getDistanceNote(distM, hasCoords);
 
   return (
     <div className="min-h-screen bg-white pb-32">
@@ -102,15 +126,21 @@ const ShiftDetailPage: React.FC = () => {
           <ArrowLeft size={20} className="text-gray-700" />
         </button>
 
-        <div className="mt-2">
-          <h1 className="text-2xl font-bold text-gray-900">{selectedShift.title}</h1>
-          <p className="text-gray-500 -mt-1">{selectedShift.location}</p>
-        </div>
+        {shift ? (
+          <div className="mt-2">
+            <h1 className="text-2xl font-bold text-gray-900">{shift.title}</h1>
+            <p className="text-gray-500 -mt-1">{shift.location}</p>
+          </div>
+        ) : (
+          <div className="mt-2">
+            <h1 className="text-xl font-bold text-gray-900">No shift selected</h1>
+          </div>
+        )}
 
         <div className="mt-4">
-          <p className="text-sm text-gray-500">{fmtDate(selectedShift.startTime)}</p>
+          <p className="text-sm text-gray-500">{fmtDate(shift?.startTime)}</p>
           <p className="text-3xl font-extrabold text-gray-900">
-            {fmtTimeHM(selectedShift.startTime)} <span className="font-semibold">To</span> {fmtTimeHM(selectedShift.endTime)}
+            {fmtTimeHM(shift?.startTime)} <span className="font-semibold">To</span> {fmtTimeHM(shift?.endTime)}
           </p>
           <p className="text-gray-500 mt-1">{scheduledHours.toFixed(0)} hours</p>
         </div>
@@ -118,29 +148,33 @@ const ShiftDetailPage: React.FC = () => {
         <div className="mt-6">
           <div className="flex items-center space-x-2 text-gray-700">
             <MapPin size={18} />
-            <span className="font-medium">{selectedShift.location}</span>
+            <span className="font-medium">{shift?.location ?? "—"}</span>
           </div>
         </div>
 
-        <a
-          href={`https://www.google.com/maps/search/?api=1&query=${selectedShift.latitude},${selectedShift.longitude}`}
-          target="_blank" rel="noopener noreferrer" className="block mt-3 overflow-hidden rounded-2xl shadow-sm"
-        >
-          <div className="w-full h-44 bg-gray-200">
-            <iframe
-              title="map" className="w-full h-full pointer-events-none"
-              src={`https://www.google.com/maps?q=${selectedShift.latitude},${selectedShift.longitude}&z=16&output=embed`}
-              loading="lazy"
-            />
-          </div>
-        </a>
+        {hasCoords && shift ? (
+          <a
+            href={`https://www.google.com/maps/search/?api=1&query=${shift.latitude},${shift.longitude}`}
+            target="_blank" rel="noopener noreferrer" className="block mt-3 overflow-hidden rounded-2xl shadow-sm"
+          >
+            <div className="w-full h-44 bg-gray-200">
+              <iframe
+                title="map" className="w-full h-full pointer-events-none"
+                src={`https://www.google.com/maps?q=${shift.latitude},${shift.longitude}&z=16&output=embed`}
+                loading="lazy"
+              />
+            </div>
+          </a>
+        ) : (
+          <div className="w-full h-44 bg-gray-100 mt-3 rounded-2xl" />
+        )}
 
         <div className="mt-6 rounded-2xl border border-gray-200 p-4">
           <h3 className="text-lg font-semibold text-gray-900">Payment</h3>
           <div className="mt-2 space-y-1 text-gray-600">
             <div className="flex items-center">
               <DollarSign size={16} className="mr-2" />
-              <span>JOD {Number(selectedShift.hourlyWage || 0).toFixed(2)}/hr × {scheduledHours.toFixed(0)} hours</span>
+              <span>JOD {Number(shift?.hourlyWage ?? 0).toFixed(2)}/hr × {scheduledHours.toFixed(0)} hours</span>
             </div>
             <div className="text-gray-500">{(TAX_RATE * 100).toFixed(0)}% Worker Tax</div>
           </div>
@@ -172,13 +206,13 @@ const ShiftDetailPage: React.FC = () => {
           )}
 
           <div className="text-center text-xs text-gray-500 mt-2">
-            {distM != null ? `You are ~${distM.toFixed(0)} m from site` : hasCoords ? "—" : "Location not set for this shift"}
+            {distanceNote}
           </div>
         </div>
 
         <div className="mt-6 flex items-center space-x-2 text-gray-600">
           <Clock size={18} />
-          <span>{workedHours.toFixed(2)} hours • {fmtMoney(workedHours * (selectedShift.hourlyWage || 0))}</span>
+          <span>{workedHours.toFixed(2)} hours • {fmtMoney(workedHours * ((shift?.hourlyWage ?? 0)))}</span>
         </div>
       </div>
     </div>

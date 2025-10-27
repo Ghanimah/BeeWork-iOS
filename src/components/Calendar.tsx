@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import BeeIcon from './BeeIcon';
@@ -106,29 +106,35 @@ const Calendar: React.FC<CalendarProps> = ({ shifts }) => {
       </div>
 
       <div className="grid grid-cols-7 gap-1">
-        {days.map((day, index) => (
-          <div
-            key={index}
-            onClick={() => day && handleDayClick(day)}
-            className={`w-full h-14 flex flex-col items-center justify-center rounded-lg cursor-pointer
-              ${day ? 'text-gray-800' : ''}
-              ${day && hasShift(day) ? 'bg-amber-100' : ''}
-              ${day && isToday(day) ? 'border border-amber-500' : ''}
-              hover:bg-amber-50 transition-colors`}
-          >
-            {day && (
-              <>
-                <span className="text-sm font-medium">{day}</span>
-                {isToday(day) && <div className="w-2 h-2 rounded-full bg-amber-500 mt-1" />}
-                {hasShift(day) && (
-                  <div className="mt-1">
-                    <BeeIcon size={16} className="text-amber-600" />
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        ))}
+        {days.map((day, index) => {
+          const key = day
+            ? `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+            : `pad-${index}`;
+          if (day === null) {
+            return <div key={key} className="w-full h-14" />;
+          }
+          const has = hasShift(day);
+          const today = isToday(day);
+          return (
+            <button
+              type="button"
+              key={key}
+              onClick={() => handleDayClick(day)}
+              aria-label={`Day ${day}${has ? ', has shift' : ''}`}
+              className={`w-full h-14 flex flex-col items-center justify-center rounded-lg cursor-pointer text-gray-800 hover:bg-amber-50 transition-colors ${
+                has ? 'bg-amber-100' : ''
+              } ${today ? 'border border-amber-500' : ''}`}
+            >
+              <span className="text-sm font-medium">{day}</span>
+              {today && <div className="w-2 h-2 rounded-full bg-amber-500 mt-1" />}
+              {has && (
+                <div className="mt-1">
+                  <BeeIcon size={16} className="text-amber-600" />
+                </div>
+              )}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

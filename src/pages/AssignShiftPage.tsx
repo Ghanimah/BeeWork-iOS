@@ -3,12 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { db } from '../firebase';
-import {
-  collection,
-  getDocs,
-  addDoc,
-  DocumentData
-} from 'firebase/firestore';
+import { collection, getDocs, addDoc } from 'firebase/firestore';
 import { ArrowLeft } from 'lucide-react';
 
 interface Employee {
@@ -44,30 +39,18 @@ const AssignShiftPage: React.FC = () => {
     longitude: '',
   });
 
-  // Only admins may assign
-  if (user.role !== 'admin') {
-    return (
-      <div className="p-6 text-center text-red-600">
-        🚫 You do not have permission to access this page.
-        <br />
-        <button
-          onClick={() => setCurrentPage('home')}
-          className="mt-4 text-blue-600 underline"
-        >
-          Go back to Home
-        </button>
-      </div>
-    );
-  }
+  // Only admins may assign – keep hooks unconditionally called
+  const isAdmin = user.role === 'admin';
 
   // Fetch all users once, then only keep those with role === 'user'
   useEffect(() => {
+    if (!isAdmin) return;
     const fetchEmployees = async () => {
       try {
         const snapshot = await getDocs(collection(db, 'users'));
         const list: Employee[] = snapshot.docs
           .map(doc => {
-            const data = doc.data() as DocumentData;
+            const data = doc.data();
             return {
               id: doc.id,
               firstName: data.firstName || '',
@@ -82,7 +65,7 @@ const AssignShiftPage: React.FC = () => {
       }
     };
     fetchEmployees();
-  }, []);
+  }, [isAdmin]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(curr => ({ ...curr, [e.target.name]: e.target.value }));
@@ -101,9 +84,9 @@ const AssignShiftPage: React.FC = () => {
         date:      formData.date,
         startTime: formData.startTime,
         endTime:   formData.endTime,
-        hourlyWage: parseFloat(formData.hourlyWage),
-        latitude:   parseFloat(formData.latitude),
-        longitude:  parseFloat(formData.longitude),
+        hourlyWage: Number.parseFloat(formData.hourlyWage),
+        latitude:   Number.parseFloat(formData.latitude),
+        longitude:  Number.parseFloat(formData.longitude),
         status:    'scheduled',
       });
       alert('✅ Shift assigned!');
@@ -135,8 +118,9 @@ const AssignShiftPage: React.FC = () => {
 
       <h2 className="text-xl font-bold mb-4">Assign Shift</h2>
 
-      <label className="block mb-2 font-medium">Select Employee:</label>
+      <label htmlFor="assign-employee" className="block mb-2 font-medium">Select Employee:</label>
       <select
+        id="assign-employee"
         value={selectedUserId}
         onChange={e => setSelectedUserId(e.target.value)}
         className="w-full mb-4 border border-gray-300 rounded p-2"
@@ -153,7 +137,7 @@ const AssignShiftPage: React.FC = () => {
         )}
       </select>
 
-      {[
+      {([
         ['title', 'Job Title'],
         ['location', 'Location'],
         ['date', 'Date (YYYY-MM-DD)'],
@@ -162,18 +146,22 @@ const AssignShiftPage: React.FC = () => {
         ['hourlyWage', 'Hourly Wage'],
         ['latitude', 'Latitude'],
         ['longitude', 'Longitude'],
-      ].map(([key, label]) => (
-        <div key={key} className="mb-3">
-          <label className="block text-sm font-medium mb-1">{label}</label>
-          <input
-            type="text"
-            name={key}
-            value={(formData as any)[key]}
-            onChange={handleChange}
-            className="w-full border border-gray-300 rounded p-2"
-          />
-        </div>
-      ))}
+      ] as Array<[keyof FormData, string]>).map(([field, label]) => {
+        const id = `assign-${String(field)}`;
+        return (
+          <div key={field} className="mb-3">
+            <label htmlFor={id} className="block text-sm font-medium mb-1">{label}</label>
+            <input
+              id={id}
+              type="text"
+              name={field}
+              value={formData[field]}
+              onChange={handleChange}
+              className="w-full border border-gray-300 rounded p-2"
+            />
+          </div>
+        );
+      })}
 
       <button
         onClick={handleSubmit}
@@ -181,6 +169,18 @@ const AssignShiftPage: React.FC = () => {
       >
         Assign Shift
       </button>
+      {!isAdmin && (
+        <div className="p-6 text-center text-red-600 mt-6">
+          🚫 You do not have permission to access this page.
+          <br />
+          <button
+            onClick={() => setCurrentPage('home')}
+            className="mt-4 text-blue-600 underline"
+          >
+            Go back to Home
+          </button>
+        </div>
+      )}
     </div>
   );
 };

@@ -10,7 +10,7 @@ const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
 
   const handleLanguageToggle = () => setLanguage(language === 'en' ? 'ar' : 'en');
-  const handleContactUs = () => { window.location.href = 'mailto:support@beework.com?subject=Support Request'; };
+  const handleContactUs = () => { globalThis.location.href = 'mailto:support@beework.com?subject=Support Request'; };
 
   const handleLogout = async () => {
     try {
