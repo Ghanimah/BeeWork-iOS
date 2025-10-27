@@ -5,7 +5,8 @@ import {
   collection, onSnapshot, QueryDocumentSnapshot, DocumentData, doc,
   getDoc, setDoc, updateDoc, serverTimestamp, Timestamp, increment
 } from "firebase/firestore";
-import { db } from "../firebase";
+import { auth, db } from "../firebase";
+import { onAuthStateChanged } from "firebase/auth";
 
 type PunchState = "idle" | "punched_in" | "completed";
 export interface ShiftPunchStatus {
@@ -67,6 +68,44 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
   const [language, setLanguage] = useState<"en" | "ar">("en");
   const [punchStatus, setPunchStatus] = useState<ShiftPunchStatus>({ state: "idle" });
+
+  // Keep AppContext user in sync with Firebase Auth and Firestore profile.
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!firebaseUser) {
+        setUser({ id: "", firstName: "", lastName: "", email: "", rating: 0, totalHours: 0, language: "en", role: "employee", profilePicture: "" });
+        return;
+      }
+      const uid = firebaseUser.uid;
+      const email = firebaseUser.email || "";
+      try {
+        const uref = doc(db, "users", uid);
+        const snap = await getDoc(uref);
+        if (snap.exists()) {
+          const d: any = snap.data();
+          setUser({
+            id: uid,
+            email,
+            firstName: d.firstName || "",
+            lastName: d.lastName || "",
+            rating: Number(d.rating ?? 0),
+            totalHours: Number(d.totalHours ?? 0),
+            language: (d.language as User["language"]) || "en",
+            role: (d.role as User["role"]) || "employee",
+            profilePicture: d.profilePicture || "",
+          });
+        } else {
+          // Profile doc missing — still set minimal user so routing works; create skeleton doc lazily.
+          setUser({ id: uid, email, firstName: "", lastName: "", rating: 0, totalHours: 0, language: "en", role: "employee", profilePicture: "" });
+          try { await setDoc(uref, { email }, { merge: true }); } catch {}
+        }
+      } catch {
+        // On failure, at least set minimal user from Auth so app can proceed.
+        setUser({ id: uid, email, firstName: "", lastName: "", rating: 0, totalHours: 0, language: "en", role: "employee", profilePicture: "" });
+      }
+    });
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, "shifts"), (snap) => {

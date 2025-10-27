@@ -1,13 +1,24 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter, HashRouter } from 'react-router-dom';
+import { Capacitor } from '@capacitor/core';
 import App from './App.tsx';
 import './index.css';
 
+const isNative = (() => {
+  try { return Capacitor.getPlatform() === 'ios' || Capacitor.getPlatform() === 'android'; } catch { return false; }
+})();
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
+    {isNative ? (
+      <HashRouter>
+        <App />
+      </HashRouter>
+    ) : (
+      <BrowserRouter>
       <App />
-    </BrowserRouter>
+      </BrowserRouter>
+    )}
   </StrictMode>
 );

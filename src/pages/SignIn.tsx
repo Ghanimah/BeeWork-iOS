@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
-import { auth, db } from '../firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { auth } from '../firebase';
 import { useApp } from '../contexts/AppContext';
 
 const emailOk = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim().toLowerCase());
@@ -25,24 +24,18 @@ const SignIn: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
 
     try {
       setBusy(true);
-      const { user } = await signInWithEmailAndPassword(auth, em, password);
-      const uid = user.uid;
-      const snap = await getDoc(doc(db, 'users', uid));
-      if (!snap.exists()) {
-        setBusy(false);
-        return setErr('User profile not found. Contact support.');
-        }
-      const data = snap.data() as any;
+      const cred = await signInWithEmailAndPassword(auth, em, password);
+      // Rely on AppContext's onAuthStateChanged listener to populate full profile.
       setUser({
-        id: uid,
-        email: data.email || user.email || '',
-        firstName: data.firstName || '',
-        lastName: data.lastName || '',
-        rating: data.rating || 0,
-        totalHours: data.totalHours || 0,
-        language: data.language || 'en',
-        role: data.role || 'employee',
-        profilePicture: data.profilePicture || ''
+        id: cred.user.uid,
+        email: cred.user.email || em,
+        firstName: '',
+        lastName: '',
+        rating: 0,
+        totalHours: 0,
+        language: 'en',
+        role: 'employee',
+        profilePicture: ''
       });
       navigate('/');
     } catch (e: any) {

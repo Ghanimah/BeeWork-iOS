@@ -35,14 +35,15 @@ const SignUp: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
       setBusy(true);
       const em = email.trim().toLowerCase();
       const userCred = await createUserWithEmailAndPassword(auth, em, password);
-      await setDoc(doc(db, 'users', userCred.user.uid), {
+      // Create profile doc, but don't block navigation if it hangs; AppContext will sync later.
+      setDoc(doc(db, 'users', userCred.user.uid), {
         email: em,
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         availability: {},
         profilePicture: '',
         role: 'employee',
-      });
+      }).catch(() => {/* non-fatal */});
       setUser({
         id: userCred.user.uid,
         email: em,
