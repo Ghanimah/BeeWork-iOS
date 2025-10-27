@@ -38,6 +38,7 @@ const AssignShiftPage: React.FC = () => {
     latitude: '',
     longitude: '',
   });
+  const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
 
   // Only admins may assign – keep hooks unconditionally called
   const isAdmin = user.role === 'admin';
@@ -76,6 +77,16 @@ const AssignShiftPage: React.FC = () => {
       alert('Please select an employee.');
       return;
     }
+    // Validate numeric fields
+    const nextErrors: Partial<Record<keyof FormData, string>> = {};
+    const hourly = Number.parseFloat(formData.hourlyWage);
+    const lat = Number.parseFloat(formData.latitude);
+    const lon = Number.parseFloat(formData.longitude);
+    if (!Number.isFinite(hourly)) nextErrors.hourlyWage = 'Enter a valid hourly wage (number).';
+    if (!Number.isFinite(lat)) nextErrors.latitude = 'Enter a valid latitude (number).';
+    if (!Number.isFinite(lon)) nextErrors.longitude = 'Enter a valid longitude (number).';
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
     try {
       await addDoc(collection(db, 'shifts'), {
         userId: selectedUserId,
@@ -84,9 +95,9 @@ const AssignShiftPage: React.FC = () => {
         date:      formData.date,
         startTime: formData.startTime,
         endTime:   formData.endTime,
-        hourlyWage: Number.parseFloat(formData.hourlyWage),
-        latitude:   Number.parseFloat(formData.latitude),
-        longitude:  Number.parseFloat(formData.longitude),
+        hourlyWage: hourly,
+        latitude:   lat,
+        longitude:  lon,
         status:    'scheduled',
       });
       alert('✅ Shift assigned!');
@@ -101,11 +112,22 @@ const AssignShiftPage: React.FC = () => {
         latitude: '',
         longitude: '',
       });
+      setErrors({});
     } catch (err) {
       console.error('Error assigning shift:', err);
       alert('❌ Error assigning shift.');
     }
   };
+
+  if (!isAdmin) {
+    return (
+      <div className="max-w-md mx-auto p-6 bg-white rounded-xl shadow-md mt-10 text-center text-red-600">
+        🚫 You do not have permission to access this page.
+        <br />
+        <button onClick={() => setCurrentPage('home')} className="mt-4 text-blue-600 underline">Go back to Home</button>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-md mx-auto p-6 bg-white rounded-xl shadow-md mt-10">
@@ -137,7 +159,7 @@ const AssignShiftPage: React.FC = () => {
         )}
       </select>
 
-      {([
+      {(([ 
         ['title', 'Job Title'],
         ['location', 'Location'],
         ['date', 'Date (YYYY-MM-DD)'],
@@ -146,8 +168,9 @@ const AssignShiftPage: React.FC = () => {
         ['hourlyWage', 'Hourly Wage'],
         ['latitude', 'Latitude'],
         ['longitude', 'Longitude'],
-      ] as Array<[keyof FormData, string]>).map(([field, label]) => {
+      ] as Array<[keyof FormData, string]>)).map(([field, label]) => {
         const id = `assign-${String(field)}`;
+        const isNumeric = field === 'hourlyWage' || field === 'latitude' || field === 'longitude';
         return (
           <div key={field} className="mb-3">
             <label htmlFor={id} className="block text-sm font-medium mb-1">{label}</label>
@@ -157,8 +180,10 @@ const AssignShiftPage: React.FC = () => {
               name={field}
               value={formData[field]}
               onChange={handleChange}
-              className="w-full border border-gray-300 rounded p-2"
+              inputMode={isNumeric ? 'decimal' : undefined}
+              className={`w-full border rounded p-2 ${errors[field] ? 'border-red-500' : 'border-gray-300'}`}
             />
+            {errors[field] && <p className="text-xs text-red-600 mt-1">{errors[field]}</p>}
           </div>
         );
       })}
@@ -169,18 +194,6 @@ const AssignShiftPage: React.FC = () => {
       >
         Assign Shift
       </button>
-      {!isAdmin && (
-        <div className="p-6 text-center text-red-600 mt-6">
-          🚫 You do not have permission to access this page.
-          <br />
-          <button
-            onClick={() => setCurrentPage('home')}
-            className="mt-4 text-blue-600 underline"
-          >
-            Go back to Home
-          </button>
-        </div>
-      )}
     </div>
   );
 };

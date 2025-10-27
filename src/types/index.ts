@@ -23,6 +23,7 @@ export interface Shift {
   status: 'scheduled' | 'in-progress' | 'completed';
   startTime?: string;
   endTime?: string;
+  punchedInAt?: string; // optional: when punch-in time is stored on shift
   totalHours?: number;
   earnings?: number;
 }

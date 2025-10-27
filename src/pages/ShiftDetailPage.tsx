@@ -62,7 +62,7 @@ const ShiftDetailPage: React.FC = () => {
 
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
   useEffect(() => {
-    const src = punchStatus.punchInAt || (shift as any)?.punchedInAt;
+    const src = punchStatus.punchInAt || shift?.punchedInAt;
     if (effectiveStatus === "in-progress" && src) setPunchStartMs(new Date(src).getTime());
     if (effectiveStatus !== "in-progress") setPunchStartMs(null);
   }, [effectiveStatus, punchStatus.punchInAt]);
@@ -78,14 +78,9 @@ const ShiftDetailPage: React.FC = () => {
   useEffect(() => { if (!askedRef.current) { askedRef.current = true; refreshDistance(); } }, []);
 
   const requireNearby = async (cb: () => Promise<void> | void) => {
-    if (!hasCoords || !shift) { 
-      if (!busy) setBusy(true); 
-      try { 
-        await cb(); 
-      } finally { 
-        setBusy(false); 
-      } 
-      return; 
+    if (!hasCoords || !shift) {
+      alert("This shift has no location coordinates; cannot verify proximity.");
+      return;
     }
     setBusy(true);
     navigator.geolocation.getCurrentPosition(
@@ -106,14 +101,29 @@ const ShiftDetailPage: React.FC = () => {
     if (nowTs < startTs) { alert("You cannot punch in before the scheduled start time."); return; }
     if (nowTs > endTs) { alert("You cannot punch in after the scheduled end time."); return; }
     if (!shift) return;
-    requireNearby(async () => { await punchIn(shift.id); setSelectedShift({ ...shift, status: "in-progress" }); });
+    requireNearby(async () => {
+      try {
+        await punchIn(shift.id);
+        setSelectedShift({ ...shift, status: "in-progress" });
+      } catch (e: unknown) {
+        const msg = (e as any)?.message || "Failed to punch in. Please try again.";
+        console.error("Punch in failed", e);
+        alert(msg);
+      }
+    });
   };
   const handlePunchOut = () => { 
     if (!shift) return; 
-    requireNearby(async () => { 
-      await punchOut(shift.id); 
-      setSelectedShift({ ...shift, status: "completed" }); 
-    }); 
+    requireNearby(async () => {
+      try {
+        await punchOut(shift.id);
+        setSelectedShift({ ...shift, status: "completed" });
+      } catch (e: unknown) {
+        const msg = (e as any)?.message || "Failed to punch out. Please try again.";
+        console.error("Punch out failed", e);
+        alert(msg);
+      }
+    });
   };
 
   const timerText = formatTimer(punchStartMs, now);
