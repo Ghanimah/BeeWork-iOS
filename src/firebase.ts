@@ -6,6 +6,7 @@ import {
   indexedDBLocalPersistence,
   initializeAuth
 } from 'firebase/auth';
+import { cordovaPopupRedirectResolver } from 'firebase/auth/cordova';
 import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -38,7 +39,7 @@ if (isNative) {
   try {
     authInstance = initializeAuth(app, {
       persistence: [indexedDBLocalPersistence, browserLocalPersistence],
-      popupRedirectResolver: undefined
+      popupRedirectResolver: cordovaPopupRedirectResolver
     });
   } catch {
     authInstance = getAuth(app);
