@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { ArrowLeft, Save, Lock } from "lucide-react";
 import { auth } from "../firebase";
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from "firebase/auth";
@@ -21,11 +21,9 @@ const ChangePasswordPage: React.FC = () => {
 
     try {
       setSaving(true);
-      // Re-authenticate with current password
       const cred = EmailAuthProvider.credential(user.email, currentPassword);
       await reauthenticateWithCredential(user, cred);
 
-      // Update to the new password
       await updatePassword(user, newPassword);
 
       alert("Password updated successfully. Use your new password next time you sign in.");
@@ -49,70 +47,76 @@ const ChangePasswordPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-      <div className="px-4 pt-8">
-        <div className="max-w-md mx-auto">
-          <div className="flex items-center mb-6">
-            <button onClick={() => navigate("/settings")} className="p-2 rounded-lg hover:bg-gray-100 transition-colors mr-3">
-              <ArrowLeft size={20} className="text-gray-600" />
-            </button>
-            <h1 className="text-xl font-bold text-gray-800">Change password</h1>
-          </div>
+    <div className="page-shell space-y-5">
+      <div className="flex items-center">
+        <button
+          onClick={() => navigate("/settings")}
+          className="p-2 rounded-lg hover:bg-gray-100 transition-colors mr-3"
+          aria-label="Back"
+        >
+          <ArrowLeft size={20} className="text-gray-600" />
+        </button>
+        <h1 className="text-xl font-bold text-gray-800">Change password</h1>
+      </div>
 
-          <div className="card space-y-4">
-            <div>
-              <label htmlFor="cp-current" className="block text-sm font-medium text-gray-700 mb-1">Current password</label>
-              <div className="flex items-center gap-2">
-                <Lock size={16} className="text-gray-500" />
-                <input
-                  type="password"
-                  id="cp-current"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="Enter current password"
-                  className="w-full p-3 border rounded-lg text-black"
-                  autoComplete="current-password"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="cp-new" className="block text-sm font-medium text-gray-700 mb-1">New password</label>
-              <input
-                type="password"
-                id="cp-new"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Enter new password"
-                className="w-full p-3 border rounded-lg text-black"
-                autoComplete="new-password"
-              />
-              <p className="text-xs text-gray-500 mt-1">Minimum 6 characters (Firebase requirement).</p>
-            </div>
-
-            <div>
-              <label htmlFor="cp-confirm" className="block text-sm font-medium text-gray-700 mb-1">Confirm new password</label>
-              <input
-                type="password"
-                id="cp-confirm"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Re-enter new password"
-                className="w-full p-3 border rounded-lg text-black"
-                autoComplete="new-password"
-              />
-            </div>
-
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="w-full flex items-center justify-center space-x-2 p-3 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
-            >
-              <Save size={18} />
-              <span>{saving ? "Saving…" : "Save"}</span>
-            </button>
+      <div className="card space-y-4">
+        <div>
+          <label htmlFor="cp-current" className="block text-sm font-medium text-gray-700 mb-1">
+            Current password
+          </label>
+          <div className="flex items-center gap-2">
+            <Lock size={16} className="text-gray-500" />
+            <input
+              type="password"
+              id="cp-current"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              placeholder="Enter current password"
+              className="w-full p-3 border rounded-lg text-black border-gray-300"
+              autoComplete="current-password"
+            />
           </div>
         </div>
+
+        <div>
+          <label htmlFor="cp-new" className="block text-sm font-medium text-gray-700 mb-1">
+            New password
+          </label>
+          <input
+            type="password"
+            id="cp-new"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            placeholder="Enter new password"
+            className="w-full p-3 border rounded-lg text-black border-gray-300"
+            autoComplete="new-password"
+          />
+          <p className="text-xs text-gray-500 mt-1">Minimum 6 characters (Firebase requirement).</p>
+        </div>
+
+        <div>
+          <label htmlFor="cp-confirm" className="block text-sm font-medium text-gray-700 mb-1">
+            Confirm new password
+          </label>
+          <input
+            type="password"
+            id="cp-confirm"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="Re-enter new password"
+            className="w-full p-3 border rounded-lg text-black border-gray-300"
+            autoComplete="new-password"
+          />
+        </div>
+
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="w-full flex items-center justify-center space-x-2 p-3 rounded-lg bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
+        >
+          <Save size={18} />
+          <span>{saving ? "Saving..." : "Save"}</span>
+        </button>
       </div>
     </div>
   );

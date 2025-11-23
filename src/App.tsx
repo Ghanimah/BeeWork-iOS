@@ -1,5 +1,5 @@
-import React from 'react';
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import type { FC } from 'react';
 
 import { AuthProvider } from './contexts/AuthContext';
 import { AppProvider, useApp } from './contexts/AppContext';
@@ -22,17 +22,17 @@ import ChangePasswordPage from './pages/ChangePasswordPage';
 // NEW
 import PayoutsPage from './pages/PayoutsPage';
 
-const SignInRoute: React.FC = () => {
+const SignInRoute: FC = () => {
   const n = useNavigate();
   return <SignIn onSwitch={() => n('/sign-up')} />;
 };
 
-const SignUpRoute: React.FC = () => {
+const SignUpRoute: FC = () => {
   const n = useNavigate();
   return <SignUp onSwitch={() => n('/sign-in')} />;
 };
 
-const AppRoutes: React.FC = () => {
+const AppRoutes: FC = () => {
   const { user } = useApp();
 
   return (
@@ -70,8 +70,8 @@ export default function App() {
   return (
     <AuthProvider>
       <AppProvider>
-        <div className="min-h-dvh bg-background text-foreground flex flex-col">
-          <main className="flex-1 overflow-y-auto">
+        <div className="app-shell">
+          <main className={`app-scroll ${hideNav ? 'no-nav' : ''}`}>
             <AppRoutes />
           </main>
           {!hideNav && <Navigation />}

@@ -1,5 +1,5 @@
 // src/contexts/AppContext.tsx
-import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from "react";
+import { createContext, useContext, useState, useEffect, useMemo, type ReactNode, type FC } from "react";
 import { User, Shift, Availability, Page } from "../types";
 import {
   collection, onSnapshot, doc,
@@ -101,14 +101,14 @@ function mapEventStyleShift(d: QueryDocumentSnapshot<DocumentData>, v: any): Shi
   const end = tsToDate(v.endTS);
   const lat = v.location?.lat;
   const lng = v.location?.lng;
-  const title = v.jobTitle ? `${v.companyName} – ${v.jobTitle}` : v.companyName;
+  const title = v.jobTitle ? `${v.companyName} - ${v.jobTitle}` : v.companyName;
   const dateStr = ymd(start) || "";
   const assigned: string[] = Array.isArray(v.assigned) ? v.assigned : [];
   return assigned.map((uid, i) => ({
     id: `${d.id}_${uid}_${i}`,
     userId: uid,
     title,
-    location: v.locationName || "—",
+    location: v.locationName || "Location pending",
     date: dateStr,
     startTime: toISO(start),
     endTime: toISO(end),
@@ -124,7 +124,7 @@ function mapSimpleShift(d: QueryDocumentSnapshot<DocumentData>, v: any): Shift {
     id: d.id,
     userId: v.userId,
     title: v.title,
-    location: v.location ?? "—",
+    location: v.location ?? "Location pending",
     date: v.date ?? "",
     startTime: typeof v.startTime === "string" ? v.startTime : toISO(tsToDate(v.startTime)),
     endTime: typeof v.endTime === "string" ? v.endTime : toISO(tsToDate(v.endTime)),
@@ -135,7 +135,7 @@ function mapSimpleShift(d: QueryDocumentSnapshot<DocumentData>, v: any): Shift {
   };
 }
 
-export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const AppProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User>({
     id: "", firstName: "", lastName: "", email: "", rating: 0, totalHours: 0,
     language: "en", role: "employee", profilePicture: ""
@@ -173,7 +173,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             profilePicture: d.profilePicture || "",
           });
         } else {
-          // Profile doc missing — still set minimal user so routing works; create skeleton doc lazily.
+          // Profile doc missing - still set minimal user so routing works; create skeleton doc lazily.
           setUser({ id: uid, email, firstName: "", lastName: "", rating: 0, totalHours: 0, language: "en", role: "employee", profilePicture: "" });
           try { await setDoc(uref, { email }, { merge: true }); } catch {}
         }

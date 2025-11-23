@@ -1,10 +1,10 @@
-import React from "react";
 import { Home, Calendar, User } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
+import type { FC } from "react";
 
-const NAV_HEIGHT = 64; // visual height
+const NAV_HEIGHT = 72; // visual height without safe inset
 
-const Navigation: React.FC = () => {
+const Navigation: FC = () => {
   const navigate = useNavigate();
   const { pathname } = useLocation();
 
@@ -18,22 +18,29 @@ const Navigation: React.FC = () => {
 
   return (
     <nav
-      // STICKY keeps it anchored at the bottom without overlaying content
       style={{
         position: "sticky",
         bottom: 0,
-        height: NAV_HEIGHT,
-        padding: "8px 16px",
-        paddingBottom: "calc(8px + var(--safe-bottom))", // safe area for iOS/Android
-        background: "white",
+        left: 0,
+        right: 0,
+        padding: "10px 18px",
+        paddingBottom: "calc(12px + var(--safe-bottom))",
+        background: "rgba(255, 255, 255, 0.95)",
         borderTop: "1px solid #e5e7eb",
+        boxShadow: "0 -10px 28px rgba(15, 23, 42, 0.08)",
+        backdropFilter: "blur(10px)",
+        WebkitBackdropFilter: "blur(10px)",
         zIndex: 40,
       }}
     >
-      <div className="h-full flex justify-around items-center max-w-md mx-auto">
+      <div
+        className="h-full flex justify-around items-center mx-auto w-full max-w-3xl"
+        style={{ minHeight: NAV_HEIGHT }}
+      >
         {items.map(({ path, icon: Icon, label }) => (
           <button
             key={path}
+            type="button"
             onClick={() => navigate(path)}
             className={`flex flex-col items-center text-xs ${
               active(path) ? "text-amber-600 font-semibold" : "text-gray-600"

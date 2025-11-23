@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import BeeIcon from './BeeIcon';
-import { Shift } from '../types'; // ✅ Import Shift type
-import { useNavigate } from 'react-router-dom'; // ✅ added
+import { Shift } from '../types';
+import { useNavigate } from 'react-router-dom';
 
 interface CalendarProps {
   shifts: Shift[];
@@ -11,7 +11,7 @@ interface CalendarProps {
 
 const Calendar: React.FC<CalendarProps> = ({ shifts }) => {
   const { setCurrentPage, setSelectedShift } = useApp();
-  const navigate = useNavigate(); // ✅ added
+  const navigate = useNavigate();
 
   const today = new Date();
   const startYear = today.getFullYear();
@@ -48,11 +48,11 @@ const Calendar: React.FC<CalendarProps> = ({ shifts }) => {
     const shift = getShiftForDay(day);
     if (shift) {
       setSelectedShift(shift);
-      setCurrentPage('shift-detail'); // ✅ keep your state logic
-      navigate('/shift');             // ✅ added route navigation
+      setCurrentPage('shift-detail');
+      navigate('/shift');
     } else {
-      setCurrentPage('no-shift');     // ✅ keep your state logic
-      navigate('/empty');             // ✅ added route navigation
+      setCurrentPage('no-shift');
+      navigate('/empty');
     }
   };
 
@@ -86,13 +86,13 @@ const Calendar: React.FC<CalendarProps> = ({ shifts }) => {
   return (
     <div className="card">
       <div className="flex items-center justify-between mb-6">
-        <button onClick={goToPreviousMonth} className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
+        <button onClick={goToPreviousMonth} className="p-2 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Previous month">
           <ChevronLeft size={20} className="text-gray-600" />
         </button>
         <h2 className="text-xl font-bold text-gray-800">
           {monthNames[currentMonth]} {currentYear}
         </h2>
-        <button onClick={goToNextMonth} className="p-2 rounded-lg hover:bg-gray-100 transition-colors">
+        <button onClick={goToNextMonth} className="p-2 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Next month">
           <ChevronRight size={20} className="text-gray-600" />
         </button>
       </div>
@@ -114,7 +114,7 @@ const Calendar: React.FC<CalendarProps> = ({ shifts }) => {
             return <div key={key} className="w-full h-14" />;
           }
           const has = hasShift(day);
-          const today = isToday(day);
+          const todayFlag = isToday(day);
           return (
             <button
               type="button"
@@ -123,10 +123,10 @@ const Calendar: React.FC<CalendarProps> = ({ shifts }) => {
               aria-label={`Day ${day}${has ? ', has shift' : ''}`}
               className={`w-full h-14 flex flex-col items-center justify-center rounded-lg cursor-pointer text-gray-800 hover:bg-amber-50 transition-colors ${
                 has ? 'bg-amber-100' : ''
-              } ${today ? 'border border-amber-500' : ''}`}
+              } ${todayFlag ? 'border border-amber-500' : ''}`}
             >
               <span className="text-sm font-medium">{day}</span>
-              {today && <div className="w-2 h-2 rounded-full bg-amber-500 mt-1" />}
+              {todayFlag && <div className="w-2 h-2 rounded-full bg-amber-500 mt-1" />}
               {has && (
                 <div className="mt-1">
                   <BeeIcon size={16} className="text-amber-600" />

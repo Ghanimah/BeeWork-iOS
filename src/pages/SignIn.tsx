@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState, type FC } from 'react';
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../firebase';
@@ -7,7 +7,7 @@ import { useApp } from '../contexts/AppContext';
 const emailOk = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim().toLowerCase());
 const pwOk = (v: string) => /^(?=.*[A-Za-z])(?=.*\d)[\s\S]{8,64}$/.test(v);
 
-const SignIn: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
+const SignIn: FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
   const { setUser } = useApp();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
@@ -20,7 +20,7 @@ const SignIn: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
     setErr(null);
     const em = email.trim().toLowerCase();
     if (!emailOk(em)) return setErr('Enter a valid email address.');
-    if (!pwOk(password)) return setErr('Password must be 8–64 chars with letters and numbers.');
+    if (!pwOk(password)) return setErr('Password must be 8-64 characters with letters and numbers.');
 
     try {
       setBusy(true);
@@ -35,7 +35,7 @@ const SignIn: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
         totalHours: 0,
         language: 'en',
         role: 'employee',
-        profilePicture: ''
+        profilePicture: '',
       });
       navigate('/');
     } catch (e: any) {
@@ -67,7 +67,7 @@ const SignIn: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
 
   const handleForgot = async () => {
     const em = email.trim().toLowerCase();
-    if (!emailOk(em)) return setErr('Enter your valid email above, then tap “Forgot password?”.');
+    if (!emailOk(em)) return setErr('Enter your valid email above, then tap "Forgot password?".');
     try {
       setBusy(true);
       await sendPasswordResetEmail(auth, em);
@@ -80,43 +80,64 @@ const SignIn: React.FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-amber-50">
-      <form onSubmit={handleSignIn} className="bg-white p-6 rounded-xl shadow-md w-80 text-center">
-        <div className="flex justify-center mb-4">
-          <img src="/images/PlanB.jpeg" alt="Plan B Logo"
-            className="w-24 h-24 object-contain rounded-full shadow-md hover:scale-105 transition-transform duration-300" />
+    <div className="page-shell min-h-[70dvh] items-center justify-center">
+      <form onSubmit={handleSignIn} className="card w-full max-w-sm text-center space-y-4">
+        <div className="flex justify-center">
+          <img
+            src="/images/PlanB.jpeg"
+            alt="Plan B Logo"
+            className="w-24 h-24 object-contain rounded-full shadow-md hover:scale-105 transition-transform duration-300"
+          />
         </div>
-        <h2 className="text-xl font-bold mb-4 text-black">Sign In to BeeWork</h2>
-
-        <input
-          type="email" placeholder="Email" value={email}
-          onChange={e => setEmail(e.target.value)}
-          className="w-full p-2 border rounded mb-3 text-black bg-white placeholder:text-gray-500"
-          autoComplete="email" required
-        />
-        <input
-          type="password" placeholder="Password"
-          value={password} onChange={e => setPassword(e.target.value)}
-          className="w-full p-2 border rounded mb-2 text-black bg-white placeholder:text-gray-500"
-          autoComplete="current-password" required
-        />
-
-        <div className="text-right mb-4">
-          <button type="button" onClick={handleForgot}
-            className="text-sm text-blue-600 underline disabled:opacity-50" disabled={busy}>
-            Forgot password?
-          </button>
+        <div className="space-y-1">
+          <h2 className="text-xl font-bold text-gray-900">Sign In to BeeWork</h2>
+          <p className="text-sm text-gray-600">Welcome back. Please sign in to continue.</p>
         </div>
 
-        {err && <div className="text-red-600 text-sm mb-3">{err}</div>}
+        <div className="space-y-3 text-left">
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full p-3 border border-gray-200 rounded-lg text-black bg-white placeholder:text-gray-500"
+            autoComplete="email"
+            required
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full p-3 border border-gray-200 rounded-lg text-black bg-white placeholder:text-gray-500"
+            autoComplete="current-password"
+            required
+          />
 
-        <button type="submit" disabled={busy}
-          className="w-full bg-amber-500 text-white py-2 rounded disabled:opacity-50">
-          {busy ? 'Signing in…' : 'Sign In'}
+          <div className="text-right">
+            <button
+              type="button"
+              onClick={handleForgot}
+              className="text-sm text-blue-600 underline disabled:opacity-50"
+              disabled={busy}
+            >
+              Forgot password?
+            </button>
+          </div>
+        </div>
+
+        {err && <div className="text-red-600 text-sm">{err}</div>}
+
+        <button
+          type="submit"
+          disabled={busy}
+          className="w-full bg-amber-500 text-white py-3 rounded-xl font-semibold disabled:opacity-60 shadow-sm"
+        >
+          {busy ? 'Signing in...' : 'Sign In'}
         </button>
 
-        <p className="text-sm text-center mt-4 text-black">
-          Don’t have an account?{' '}
+        <p className="text-sm text-center text-black">
+          Don't have an account?{' '}
           <button
             type="button"
             onClick={onSwitch}

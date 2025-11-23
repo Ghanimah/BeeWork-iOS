@@ -48,14 +48,14 @@ const UpcomingShifts: React.FC<UpcomingShiftsProps> = ({ shifts }) => {
   };
 
   return (
-    <div className="mt-8">
-      <h3 className="text-lg font-bold text-gray-800 mb-4">Upcoming Shifts</h3>
+    <div className="space-y-3">
+      <h3 className="text-lg font-bold text-gray-800">Upcoming Shifts</h3>
 
       {nextShift ? (
         <button
           type="button"
           aria-label="Open next shift details"
-          className="card text-left cursor-pointer hover:shadow-xl transition-shadow duration-200"
+          className="card text-left cursor-pointer hover:shadow-xl transition-shadow duration-200 w-full"
           onClick={handleShiftClick}
         >
           <div className="flex items-center justify-between mb-4">
@@ -92,7 +92,7 @@ const UpcomingShifts: React.FC<UpcomingShiftsProps> = ({ shifts }) => {
                   hour: "2-digit",
                   minute: "2-digit",
                 })}{" "}
-                –{" "}
+                -{" "}
                 {new Date(nextShift.endTime || "").toLocaleTimeString([], {
                   hour: "2-digit",
                   minute: "2-digit",
