@@ -1,5 +1,11 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { Capacitor } from '@capacitor/core';
+import { getApp, getApps, initializeApp } from 'firebase/app';
+import {
+  browserLocalPersistence,
+  getAuth,
+  indexedDBLocalPersistence,
+  initializeAuth
+} from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -13,8 +19,33 @@ const firebaseConfig = {
   measurementId: "G-RE057PCDWV"
 };
 
-const app = initializeApp(firebaseConfig);
+// Avoid re-initializing during HMR
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// ✅ Export both
-export const auth = getAuth(app);
+const isNative = (() => {
+  try {
+    const platform = Capacitor.getPlatform();
+    return platform === 'ios' || platform === 'android';
+  } catch {
+    return false;
+  }
+})();
+
+// On Capacitor (capacitor://localhost), skip the default popup/redirect resolver
+// to avoid loading Google's gapi iframe bundle, which is blocked by CORS in WKWebView.
+let authInstance;
+if (isNative) {
+  try {
+    authInstance = initializeAuth(app, {
+      persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+      popupRedirectResolver: undefined
+    });
+  } catch {
+    authInstance = getAuth(app);
+  }
+} else {
+  authInstance = getAuth(app);
+}
+
+export const auth = authInstance;
 export const db = getFirestore(app);
