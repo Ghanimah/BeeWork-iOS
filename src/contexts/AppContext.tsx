@@ -186,13 +186,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, []);
 
   useEffect(() => {
+    // Only listen after auth to avoid permission-denied errors when unauthenticated.
+    if (!user.id) { setShifts([]); return; }
     const unsub = onSnapshot(collection(db, "shifts"), (snap) => {
       const rows = snap.docs.flatMap(mapShiftDoc);
       rows.sort((a, b) => (new Date(b.startTime || 0).getTime()) - (new Date(a.startTime || 0).getTime()));
       setShifts(rows);
     });
     return () => unsub();
-  }, []);
+  }, [user.id]);
 
   useEffect(() => {
     setPunchStatus({ state: "idle" });
