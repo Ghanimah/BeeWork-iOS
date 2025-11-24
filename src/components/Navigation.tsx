@@ -23,33 +23,42 @@ const Navigation: FC = () => {
         bottom: 0,
         left: 0,
         right: 0,
-        padding: "10px 18px",
+        padding: "10px 0",
         paddingBottom: "calc(12px + var(--safe-bottom))",
         background: "rgba(255, 255, 255, 0.95)",
         borderTop: "1px solid #e5e7eb",
-        boxShadow: "0 -10px 28px rgba(15, 23, 42, 0.08)",
-        backdropFilter: "blur(10px)",
-        WebkitBackdropFilter: "blur(10px)",
+        boxShadow: "0 -10px 28px rgba(15, 23, 42, 0.06)",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
         zIndex: 40,
       }}
     >
-      <div
-        className="h-full flex items-center justify-center mx-auto"
-        style={{ minHeight: NAV_HEIGHT, maxWidth: 320, gap: 36 }}
-      >
-        {items.map(({ path, icon: Icon, label }) => (
-          <button
-            key={path}
-            type="button"
-            onClick={() => navigate(path)}
-            className={`flex flex-col items-center text-xs leading-tight ${
-              active(path) ? "text-amber-600 font-semibold" : "text-gray-600"
-            }`}
-          >
-            <Icon size={22} strokeWidth={2.1} />
-            <span className="mt-1">{label}</span>
-          </button>
-        ))}
+      <div className="relative mx-auto" style={{ height: NAV_HEIGHT, maxWidth: 480 }}>
+        {items.map(({ path, icon: Icon, label }) => {
+          const isHome = path === "/home";
+          const baseStyle: React.CSSProperties = {
+            position: "absolute",
+            top: "50%",
+            transform: "translate(-50%, -50%)",
+            left: isHome ? "50%" : path === "/availability" ? "25%" : "75%",
+          };
+          return (
+            <button
+              key={path}
+              type="button"
+              onClick={() => navigate(path)}
+              style={baseStyle}
+              className={`flex flex-col items-center ${
+                isHome ? "gap-1.5" : "gap-1"
+              } ${isHome ? "text-[13px]" : "text-xs"} leading-tight ${
+                active(path) ? "text-amber-600 font-semibold" : "text-gray-600"
+              }`}
+            >
+              <Icon size={isHome ? 24 : 20} strokeWidth={isHome ? 2.2 : 2} />
+              <span className={isHome ? "font-semibold" : "font-medium"}>{label}</span>
+            </button>
+          );
+        })}
       </div>
     </nav>
   );
