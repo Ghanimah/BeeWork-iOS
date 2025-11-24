@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { MapPin, Clock, DollarSign, Play } from "lucide-react";
+import { MapPin, Clock, Play } from "lucide-react";
 import { useApp } from "../contexts/AppContext";
 import BeeIcon from "./BeeIcon";
 import { Shift } from "../types";
@@ -40,71 +40,54 @@ const UpcomingShifts: React.FC<UpcomingShiftsProps> = ({ shifts }) => {
     });
   };
 
-  const handleShiftClick = () => {
-    if (nextShift) {
-      setSelectedShift(nextShift);
-      setCurrentPage("shift-detail");
-    }
-  };
-
   return (
     <div className="space-y-3">
-      <h3 className="text-lg font-bold text-gray-800">Upcoming Shifts</h3>
+      <h3 className="text-lg font-bold text-gray-900">Upcoming Shifts</h3>
 
       {nextShift ? (
-        <button
-          type="button"
-          aria-label="Open next shift details"
-          className="card text-left cursor-pointer hover:shadow-xl transition-shadow duration-200 w-full"
-          onClick={handleShiftClick}
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-amber-100 rounded-lg">
-                <BeeIcon size={20} className="text-amber-600" />
-              </div>
-              <div>
-                <h4 className="font-semibold text-gray-800">Next Shift</h4>
-                <p className="text-sm text-gray-600">{formatDate(nextShift.date)}</p>
-              </div>
-            </div>
-            <div className="flex items-center text-green-600">
-              <Play size={16} className="mr-1" />
-              <span className="text-xs font-medium uppercase">Scheduled</span>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex items-center space-x-3 text-gray-600">
-              <MapPin size={16} />
-              <span className="text-sm">{nextShift.location}</span>
-            </div>
-
-            <div className="flex items-center space-x-3 text-gray-600">
-              <DollarSign size={16} />
-              <span className="text-sm">JOD {Number(nextShift.hourlyWage).toFixed(2)}/hr</span>
-            </div>
-
-            <div className="flex items-center space-x-3 text-gray-600">
-              <Clock size={16} />
-              <span className="text-sm">
-                {new Date(nextShift.startTime || "").toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}{" "}
-                -{" "}
-                {new Date(nextShift.endTime || "").toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
-            </div>
-          </div>
-        </button>
+        <div className="rounded-2xl border border-amber-100 bg-white divide-y divide-amber-50 shadow-[0_10px_30px_-26px_rgba(0,0,0,0.35)]">
+          {[nextShift, ...upcomingShifts.slice(1)].map((shift, idx) => {
+            const start = new Date(shift.startTime || "");
+            const end = new Date(shift.endTime || "");
+            return (
+              <button
+                key={shift.id || idx}
+                type="button"
+                onClick={() => {
+                  setSelectedShift(shift);
+                  setCurrentPage("shift-detail");
+                }}
+                className="w-full px-4 py-3 text-left hover:bg-amber-50/60 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <div className="text-xs uppercase tracking-wide text-amber-600 font-semibold">
+                      {formatDate(shift.date)}
+                    </div>
+                    <div className="text-sm font-semibold text-gray-900">{shift.title}</div>
+                    <div className="flex items-center gap-2 text-xs text-gray-600">
+                      <Clock size={14} />
+                      <span>
+                        {start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} -{" "}
+                        {end.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                      <MapPin size={14} />
+                      <span className="truncate">{shift.location}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 text-amber-600 text-xs font-semibold">
+                    <Play size={14} />
+                    Scheduled
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
       ) : (
-        <div className="card text-center py-8">
-          <BeeIcon size={48} className="text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500">No upcoming shifts scheduled</p>
+        <div className="rounded-2xl border border-dashed border-amber-100 bg-white text-center py-8">
+          <BeeIcon size={40} className="text-gray-300 mx-auto mb-3" />
+          <p className="text-gray-500 text-sm">No upcoming shifts scheduled</p>
         </div>
       )}
     </div>

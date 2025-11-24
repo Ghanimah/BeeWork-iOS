@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
-import BeeIcon from './BeeIcon';
 import { Shift } from '../types';
 import { useNavigate } from 'react-router-dom';
 
@@ -84,12 +83,12 @@ const Calendar: React.FC<CalendarProps> = ({ shifts }) => {
   };
 
   return (
-    <div className="card">
-      <div className="flex items-center justify-between mb-6">
+    <div className="rounded-2xl border border-amber-100 bg-white shadow-[0_12px_36px_-26px_rgba(0,0,0,0.35)] p-4 sm:p-5">
+      <div className="flex items-center justify-between mb-4">
         <button onClick={goToPreviousMonth} className="p-2 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Previous month">
           <ChevronLeft size={20} className="text-gray-600" />
         </button>
-        <h2 className="text-xl font-bold text-gray-800">
+        <h2 className="text-lg font-bold text-gray-900">
           {monthNames[currentMonth]} {currentYear}
         </h2>
         <button onClick={goToNextMonth} className="p-2 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Next month">
@@ -97,15 +96,13 @@ const Calendar: React.FC<CalendarProps> = ({ shifts }) => {
         </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 mb-2">
+      <div className="grid grid-cols-7 gap-1.5 mb-2 text-[11px] text-gray-500 font-semibold">
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-          <div key={day} className="text-center w-full text-sm font-semibold text-gray-600">
-            {day}
-          </div>
+          <div key={day} className="text-center w-full">{day}</div>
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7 gap-1.5">
         {days.map((day, index) => {
           const key = day
             ? `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
@@ -121,17 +118,16 @@ const Calendar: React.FC<CalendarProps> = ({ shifts }) => {
               key={key}
               onClick={() => handleDayClick(day)}
               aria-label={`Day ${day}${has ? ', has shift' : ''}`}
-              className={`w-full h-14 flex flex-col items-center justify-center rounded-lg cursor-pointer text-gray-800 hover:bg-amber-50 transition-colors ${
-                has ? 'bg-amber-100' : ''
-              } ${todayFlag ? 'border border-amber-500' : ''}`}
+              className="w-full h-14 flex flex-col items-center justify-center rounded-xl cursor-pointer text-gray-800 hover:bg-amber-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
             >
-              <span className="text-sm font-medium">{day}</span>
-              {todayFlag && <div className="w-2 h-2 rounded-full bg-amber-500 mt-1" />}
-              {has && (
-                <div className="mt-1">
-                  <BeeIcon size={16} className="text-amber-600" />
-                </div>
-              )}
+              <span
+                className={`text-sm font-medium w-10 h-10 flex items-center justify-center rounded-full ${
+                  todayFlag ? 'bg-amber-500 text-white' : ''
+                }`}
+              >
+                {day}
+              </span>
+              {has && <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1" />}
             </button>
           );
         })}
