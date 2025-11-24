@@ -34,19 +34,19 @@ const Navigation: FC = () => {
       }}
     >
       <div
-        className="h-full flex justify-around items-center mx-auto w-full max-w-3xl"
-        style={{ minHeight: NAV_HEIGHT }}
+        className="h-full flex items-center justify-center mx-auto"
+        style={{ minHeight: NAV_HEIGHT, maxWidth: 320, gap: 36 }}
       >
         {items.map(({ path, icon: Icon, label }) => (
           <button
             key={path}
             type="button"
             onClick={() => navigate(path)}
-            className={`flex flex-col items-center text-xs ${
+            className={`flex flex-col items-center text-xs leading-tight ${
               active(path) ? "text-amber-600 font-semibold" : "text-gray-600"
             }`}
           >
-            <Icon size={22} />
+            <Icon size={22} strokeWidth={2.1} />
             <span className="mt-1">{label}</span>
           </button>
         ))}
