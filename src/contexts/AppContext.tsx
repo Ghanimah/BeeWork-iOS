@@ -24,6 +24,7 @@ interface AppContextType {
   currentPage: Page;
   selectedShift: Shift | null;
   language: "en" | "ar";
+  authReady: boolean;
   setUser: (user: User) => void;
   setShifts: (shifts: Shift[]) => void;
   setAvailability: (availability: Availability[]) => void;
@@ -146,12 +147,14 @@ export const AppProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
   const [language, setLanguage] = useState<"en" | "ar">("en");
   const [punchStatus, setPunchStatus] = useState<ShiftPunchStatus>({ state: "idle" });
+  const [authReady, setAuthReady] = useState(false);
 
   // Keep AppContext user in sync with Firebase Auth and Firestore profile.
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (!firebaseUser) {
         setUser({ id: "", firstName: "", lastName: "", email: "", rating: 0, totalHours: 0, language: "en", role: "employee", profilePicture: "" });
+        setAuthReady(true);
         return;
       }
       const uid = firebaseUser.uid;
@@ -180,6 +183,8 @@ export const AppProvider: FC<{ children: ReactNode }> = ({ children }) => {
       } catch {
         // On failure, at least set minimal user from Auth so app can proceed.
         setUser({ id: uid, email, firstName: "", lastName: "", rating: 0, totalHours: 0, language: "en", role: "employee", profilePicture: "" });
+      } finally {
+        setAuthReady(true);
       }
     });
     return () => unsub();
@@ -238,11 +243,11 @@ export const AppProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const logout = () => { setUser({ ...user, id: "" }); setCurrentPage("home"); };
 
   const contextValue = useMemo(() => ({
-    user, shifts, availability, currentPage, selectedShift, language,
+    user, shifts, availability, currentPage, selectedShift, language, authReady,
     setUser, setShifts, setAvailability, setCurrentPage, setSelectedShift,
     setLanguage, punchIn, punchOut, updateProfile, logout,
     punchStatus,
-  }), [user, shifts, availability, currentPage, selectedShift, language, punchStatus]);
+  }), [user, shifts, availability, currentPage, selectedShift, language, punchStatus, authReady]);
 
   return (
     <AppContext.Provider value={contextValue}>

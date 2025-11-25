@@ -12,7 +12,7 @@ const HomePage: FC = () => {
     <div className="page-shell space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-bold text-gray-900">Welcome to BeeWork</h1>
-        <p className="text-sm text-gray-600">Your daily hustle, organized.</p>
+        <p className="text-sm text-gray-600">Your daily hustle, beautifully organized.</p>
       </div>
 
       <Calendar shifts={userShifts} />

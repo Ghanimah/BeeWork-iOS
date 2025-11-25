@@ -33,30 +33,34 @@ const SignUpRoute: FC = () => {
 };
 
 const AppRoutes: FC = () => {
-  const { user } = useApp();
+  const { user, authReady } = useApp();
+  const isAuthed = Boolean(user.id);
+  const requireAuth = (el: JSX.Element) => (isAuthed ? el : <Navigate to="/sign-in" replace />);
+
+  if (!authReady) return null;
 
   return (
     <Routes>
-      <Route path="/" element={user.id ? <Navigate to="/home" replace /> : <Navigate to="/sign-in" replace />} />
-      <Route path="/sign-in" element={<SignInRoute />} />
-      <Route path="/sign-up" element={<SignUpRoute />} />
+      <Route path="/" element={isAuthed ? <Navigate to="/home" replace /> : <Navigate to="/sign-in" replace />} />
+      <Route path="/sign-in" element={isAuthed ? <Navigate to="/home" replace /> : <SignInRoute />} />
+      <Route path="/sign-up" element={isAuthed ? <Navigate to="/home" replace /> : <SignUpRoute />} />
 
-      <Route path="/home" element={<HomePage />} />
-      <Route path="/profile" element={<ProfilePage />} />
-      <Route path="/settings" element={<SettingsPage />} />
+      <Route path="/home" element={requireAuth(<HomePage />)} />
+      <Route path="/profile" element={requireAuth(<ProfilePage />)} />
+      <Route path="/settings" element={requireAuth(<SettingsPage />)} />
 
       {/* Account-related */}
-      <Route path="/personal-info" element={<PersonalInfoPage />} />
-      <Route path="/change-password" element={<ChangePasswordPage />} />
+      <Route path="/personal-info" element={requireAuth(<PersonalInfoPage />)} />
+      <Route path="/change-password" element={requireAuth(<ChangePasswordPage />)} />
 
       {/* Payouts */}
-      <Route path="/payouts" element={<PayoutsPage />} />
+      <Route path="/payouts" element={requireAuth(<PayoutsPage />)} />
 
       {/* Other existing pages */}
-      <Route path="/assign" element={<AssignShiftPage />} />
-      <Route path="/availability" element={<AvailabilityPage />} />
-      <Route path="/shift" element={<ShiftDetailPage />} />
-      <Route path="/empty" element={<EmptyShiftPage />} />
+      <Route path="/assign" element={requireAuth(<AssignShiftPage />)} />
+      <Route path="/availability" element={requireAuth(<AvailabilityPage />)} />
+      <Route path="/shift" element={requireAuth(<ShiftDetailPage />)} />
+      <Route path="/empty" element={requireAuth(<EmptyShiftPage />)} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
