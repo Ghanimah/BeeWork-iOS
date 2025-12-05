@@ -1,12 +1,17 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Calendar, Clock, Save } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { auth, db } from '../firebase';
 import { setDoc, doc } from 'firebase/firestore';
+import { defaultAvailability, normalizeAvailability } from '../utils/availability';
 
 const AvailabilityPage: React.FC = () => {
   const { availability, setAvailability } = useApp();
-  const [localAvailability, setLocalAvailability] = useState(availability);
+  const [localAvailability, setLocalAvailability] = useState(() => normalizeAvailability(availability ?? defaultAvailability));
+
+  useEffect(() => {
+    setLocalAvailability(normalizeAvailability(availability));
+  }, [availability]);
 
   const today = new Date();
   const isFriday = today.getDay() === 5;
@@ -28,10 +33,17 @@ const AvailabilityPage: React.FC = () => {
     if (!canEdit) return;
 
     setLocalAvailability((prev) =>
-      prev.map((item) =>
-        item.day === day
-          ? { ...item, available, startTime: available ? '09:00' : undefined, endTime: available ? '17:00' : undefined }
-          : item
+      normalizeAvailability(
+        prev.map((item) =>
+          item.day === day
+            ? {
+                ...item,
+                available,
+                startTime: available ? item.startTime || '09:00' : undefined,
+                endTime: available ? item.endTime || '17:00' : undefined,
+              }
+            : item
+        )
       )
     );
   };
@@ -40,7 +52,7 @@ const AvailabilityPage: React.FC = () => {
     if (!canEdit) return;
 
     setLocalAvailability((prev) =>
-      prev.map((item) => (item.day === day ? { ...item, [type]: value } : item))
+      normalizeAvailability(prev.map((item) => (item.day === day ? { ...item, [type]: value } : item)))
     );
   };
 
@@ -51,7 +63,8 @@ const AvailabilityPage: React.FC = () => {
       return;
     }
 
-    const cleanedAvailability = localAvailability.map((item) => {
+    const normalizedLocal = normalizeAvailability(localAvailability);
+    const cleanedAvailability = normalizedLocal.map((item) => {
       const base = { day: item.day, available: item.available };
       if (item.available) {
         return {
@@ -63,7 +76,7 @@ const AvailabilityPage: React.FC = () => {
       return base;
     });
 
-    setAvailability(cleanedAvailability);
+    setAvailability(normalizeAvailability(cleanedAvailability));
 
     try {
       await setDoc(

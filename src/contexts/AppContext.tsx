@@ -8,6 +8,7 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import { onAuthStateChanged } from "firebase/auth";
+import { defaultAvailability, normalizeAvailability } from "../utils/availability";
 
 type PunchState = "idle" | "punched_in" | "completed";
 export interface ShiftPunchStatus {
@@ -142,7 +143,7 @@ export const AppProvider: FC<{ children: ReactNode }> = ({ children }) => {
     language: "en", role: "employee", profilePicture: ""
   });
   const [shifts, setShifts] = useState<Shift[]>([]);
-  const [availability, setAvailability] = useState<Availability[]>([]);
+  const [availability, setAvailability] = useState<Availability[]>(defaultAvailability);
   const [currentPage, setCurrentPage] = useState<Page>("home");
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
   const [language, setLanguage] = useState<"en" | "ar">("en");
@@ -154,6 +155,7 @@ export const AppProvider: FC<{ children: ReactNode }> = ({ children }) => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (!firebaseUser) {
         setUser({ id: "", firstName: "", lastName: "", email: "", rating: 0, totalHours: 0, language: "en", role: "employee", profilePicture: "" });
+        setAvailability(defaultAvailability);
         setAuthReady(true);
         return;
       }
@@ -175,14 +177,17 @@ export const AppProvider: FC<{ children: ReactNode }> = ({ children }) => {
             role: (d.role as User["role"]) || "employee",
             profilePicture: d.profilePicture || "",
           });
+          setAvailability(normalizeAvailability(d.availability));
         } else {
           // Profile doc missing - still set minimal user so routing works; create skeleton doc lazily.
           setUser({ id: uid, email, firstName: "", lastName: "", rating: 0, totalHours: 0, language: "en", role: "employee", profilePicture: "" });
-          try { await setDoc(uref, { email }, { merge: true }); } catch {}
+          setAvailability(defaultAvailability);
+          try { await setDoc(uref, { email, availability: defaultAvailability }, { merge: true }); } catch {}
         }
       } catch {
         // On failure, at least set minimal user from Auth so app can proceed.
         setUser({ id: uid, email, firstName: "", lastName: "", rating: 0, totalHours: 0, language: "en", role: "employee", profilePicture: "" });
+        setAvailability(defaultAvailability);
       } finally {
         setAuthReady(true);
       }
@@ -240,7 +245,11 @@ export const AppProvider: FC<{ children: ReactNode }> = ({ children }) => {
   };
 
   const updateProfile = (u: Partial<User>) => setUser(prev => ({ ...prev, ...u }));
-  const logout = () => { setUser({ ...user, id: "" }); setCurrentPage("home"); };
+  const logout = () => {
+    setUser({ ...user, id: "" });
+    setAvailability(defaultAvailability);
+    setCurrentPage("home");
+  };
 
   const contextValue = useMemo(() => ({
     user, shifts, availability, currentPage, selectedShift, language, authReady,

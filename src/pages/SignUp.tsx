@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { useApp } from '../contexts/AppContext';
+import { defaultAvailability } from '../utils/availability';
 
 const emailOk = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim().toLowerCase());
 // Name: starts with a letter, then 1-49 of letters/marks/apostrophe/hyphen/space
@@ -41,7 +42,7 @@ const SignUp: FC<{ onSwitch: () => void }> = ({ onSwitch }) => {
         email: em,
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-        availability: {},
+        availability: defaultAvailability,
         profilePicture: '',
         role: 'employee',
       }).catch(() => {});
