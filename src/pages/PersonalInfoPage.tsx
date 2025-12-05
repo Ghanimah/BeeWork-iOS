@@ -294,7 +294,7 @@ const PersonalInfoPage: FC = () => {
               type="date"
               value={dob}
               onChange={(e) => setDob(e.target.value)}
-              className="w-full p-3 border rounded-lg text-black border-gray-300"
+              className="w-full h-12 px-3 border rounded-lg text-black border-gray-300 bg-white"
             />
           </div>
         </div>
