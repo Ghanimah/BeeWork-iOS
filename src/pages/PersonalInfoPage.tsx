@@ -1,5 +1,5 @@
 // src/pages/PersonalInfoPage.tsx
-import { useEffect, useState, type FC } from 'react';
+import { useEffect, useRef, useState, type FC } from 'react';
 import { ArrowLeft, Save, Lock } from 'lucide-react';
 import { auth, db } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
@@ -39,6 +39,7 @@ const PersonalInfoPage: FC = () => {
   const [nationalId, setNationalId] = useState('');
   const [cliq, setCliq] = useState('');
   const [saving, setSaving] = useState(false);
+  const dobPickerRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -289,13 +290,25 @@ const PersonalInfoPage: FC = () => {
             <label htmlFor="pi-dob" className="block text-sm font-medium text-gray-700 mb-1">
               Date of birth
             </label>
-            <input
-              id="pi-dob"
-              type="date"
-              value={dob}
-              onChange={(e) => setDob(e.target.value)}
-              className="w-full h-12 px-3 border rounded-lg text-black border-gray-300 bg-white"
-            />
+            <div className="relative">
+              <input
+                id="pi-dob"
+                type="text"
+                readOnly
+                value={dob}
+                placeholder="YYYY-MM-DD"
+                onClick={() => dobPickerRef.current?.showPicker?.() ?? dobPickerRef.current?.focus()}
+                className="w-full p-3 border rounded-lg text-black border-gray-300 bg-white"
+              />
+              <input
+                ref={dobPickerRef}
+                type="date"
+                value={dob}
+                onChange={(e) => setDob(e.target.value)}
+                className="absolute inset-0 opacity-0 pointer-events-none"
+                tabIndex={-1}
+              />
+            </div>
           </div>
         </div>
 
