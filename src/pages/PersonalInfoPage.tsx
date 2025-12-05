@@ -18,6 +18,11 @@ const ibanOk = (v: string) => {
   if (!/^[A-Z0-9]{15,34}$/.test(x)) return false;
   return true;
 };
+const genderOptions = ['male', 'female'] as const;
+const genderOk = (v: string) => v === '' || genderOptions.includes(v as (typeof genderOptions)[number]);
+const dobOk = (v: string) => v === '' || /^\d{4}-\d{2}-\d{2}$/.test(v);
+const nationalIdOk = (v: string) => v === '' || /^\d{10}$/.test(v);
+const cliqOk = (v: string) => v === '' || /^[A-Za-z0-9]+$/.test(v);
 
 const PersonalInfoPage: FC = () => {
   const navigate = useNavigate();
@@ -29,6 +34,10 @@ const PersonalInfoPage: FC = () => {
 
   const [iban, setIban] = useState('');
   const [phone, setPhone] = useState('');
+  const [gender, setGender] = useState('');
+  const [dob, setDob] = useState('');
+  const [nationalId, setNationalId] = useState('');
+  const [cliq, setCliq] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -43,8 +52,12 @@ const PersonalInfoPage: FC = () => {
         setLastName(d.lastName || '');
         setEmail(nextEmail);
         setOrigEmail(nextEmail);
-        setIban(d.iban || d.cliq || '');
+        setIban(d.iban || '');
         setPhone(d.phone || '');
+        setGender(d.gender || '');
+        setDob(d.dob || '');
+        setNationalId(d.nationalId || '');
+        setCliq(d.cliq || '');
       } else {
         setEmail(u.email || '');
         setOrigEmail(u.email || '');
@@ -60,6 +73,10 @@ const PersonalInfoPage: FC = () => {
     if (!ibanOk(iban)) return 'Enter a valid IBAN (letters and numbers only, 15-34 chars).';
     const phoneOk = phone === '' || /^\d+$/.test(phone);
     if (!phoneOk) return 'Phone should contain digits only.';
+    if (!genderOk(gender)) return 'Choose a valid gender.';
+    if (!dobOk(dob)) return 'Enter date of birth in YYYY-MM-DD.';
+    if (!nationalIdOk(nationalId)) return 'National ID must be exactly 10 digits.';
+    if (!cliqOk(cliq)) return 'Cliq can contain letters and numbers only.';
     return null;
   };
 
@@ -71,6 +88,10 @@ const PersonalInfoPage: FC = () => {
         lastName: lastName.trim(),
         iban: normalizeIban(iban),
         phone: phone.trim(),
+        gender: gender.trim(),
+        dob: dob.trim(),
+        nationalId: nationalId.trim(),
+        cliq: cliq.trim(),
       },
       { merge: true }
     );
@@ -246,6 +267,70 @@ const PersonalInfoPage: FC = () => {
             pattern="\d*"
           />
           <p className="text-xs text-gray-500 mt-1">Digits only.</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="pi-gender" className="block text-sm font-medium text-gray-700 mb-1">
+              Gender
+            </label>
+            <select
+              id="pi-gender"
+              value={gender}
+              onChange={(e) => setGender(e.target.value)}
+              className="w-full p-3 border rounded-lg text-black border-gray-300 bg-white"
+            >
+              <option value="">Select gender</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+            </select>
+          </div>
+          <div>
+            <label htmlFor="pi-dob" className="block text-sm font-medium text-gray-700 mb-1">
+              Date of birth
+            </label>
+            <input
+              id="pi-dob"
+              type="date"
+              value={dob}
+              onChange={(e) => setDob(e.target.value)}
+              className="w-full p-3 border rounded-lg text-black border-gray-300"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="pi-national" className="block text-sm font-medium text-gray-700 mb-1">
+              National ID
+            </label>
+            <input
+              id="pi-national"
+              value={nationalId}
+              onChange={(e) => setNationalId(replaceAllCompat(e.target.value, /\D+/g, '').slice(0, 10))}
+              placeholder="10 digits"
+              className="w-full p-3 border rounded-lg text-black border-gray-300"
+              inputMode="numeric"
+              pattern="\d{10}"
+              maxLength={10}
+            />
+            <p className="text-xs text-gray-500 mt-1">Exactly 10 digits.</p>
+          </div>
+          <div>
+            <label htmlFor="pi-cliq" className="block text-sm font-medium text-gray-700 mb-1">
+              Cliq
+            </label>
+            <input
+              id="pi-cliq"
+              value={cliq}
+              onChange={(e) => setCliq(replaceAllCompat(e.target.value, /[^A-Za-z0-9]/g, ''))}
+              placeholder="Letters and numbers"
+              className="w-full p-3 border rounded-lg text-black border-gray-300"
+              inputMode="text"
+              autoCapitalize="none"
+              autoCorrect="off"
+            />
+          </div>
         </div>
 
         <button
