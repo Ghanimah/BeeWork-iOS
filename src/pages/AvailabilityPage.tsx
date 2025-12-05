@@ -147,12 +147,12 @@ const AvailabilityPage: React.FC = () => {
               </div>
 
               {dayAvailability?.available && (
-                <div className="flex flex-row gap-3 items-start">
-                  <div className="flex flex-col gap-1">
+                <div className="flex flex-row gap-3 items-start w-full">
+                  <div className="flex flex-col gap-1 flex-1">
                     <label htmlFor={`${key}-start`} className="block text-sm font-medium text-gray-700">
                       Start Time
                     </label>
-                    <div className="relative flex items-center h-10">
+                    <div className="relative flex items-center h-10 w-full">
                       <Clock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
                         type="time"
@@ -160,18 +160,18 @@ const AvailabilityPage: React.FC = () => {
                         value={dayAvailability.startTime || '09:00'}
                         onChange={(e) => handleTimeChange(key, 'startTime', e.target.value)}
                         disabled={isDisabled}
-                        className={`h-10 min-w-[120px] w-auto pl-8 pr-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+                        className={`h-10 w-full flex-1 pl-8 pr-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent ${
                           canEdit ? '' : 'bg-gray-50 text-gray-500'
                         }`}
                       />
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-1">
+                  <div className="flex flex-col gap-1 flex-1">
                     <label htmlFor={`${key}-end`} className="block text-sm font-medium text-gray-700">
                       End Time
                     </label>
-                    <div className="relative flex items-center h-10">
+                    <div className="relative flex items-center h-10 w-full">
                       <Clock size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
                         type="time"
@@ -179,7 +179,7 @@ const AvailabilityPage: React.FC = () => {
                         value={dayAvailability.endTime || '17:00'}
                         onChange={(e) => handleTimeChange(key, 'endTime', e.target.value)}
                         disabled={isDisabled}
-                        className={`h-10 min-w-[120px] w-auto pl-8 pr-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+                        className={`h-10 w-full flex-1 pl-8 pr-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 focus:border-transparent ${
                           canEdit ? '' : 'bg-gray-50 text-gray-500'
                         }`}
                       />
