@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState, type FC } from "react";
 import { ArrowLeft, MapPin, DollarSign, Clock, Play, Square } from "lucide-react";
 import { useApp } from "../contexts/AppContext";
+import { useNavigate } from "react-router-dom";
 
 const METERS_RADIUS = 500;
 const TAX_RATE = 0.05;
@@ -35,6 +36,7 @@ const getEffectiveStatus = (shiftStatus: string | undefined, punchState: string)
 
 const ShiftDetailPage: FC = () => {
   const { selectedShift, setCurrentPage, setSelectedShift, punchIn, punchOut, punchStatus } = useApp();
+  const navigate = useNavigate();
   const [now, setNow] = useState(Date.now());
   const [distM, setDistM] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -50,13 +52,6 @@ const ShiftDetailPage: FC = () => {
   const startTs = shift?.startTime ? new Date(shift.startTime).getTime() : null;
   const endTs = shift?.endTime ? new Date(shift.endTime).getTime() : null;
   const effectiveStatus = getEffectiveStatus(shift?.status, punchStatus.state);
-
-  const workedHours = useMemo(() => {
-    const start = startTs;
-    const end = effectiveStatus === "in-progress" ? now : endTs ?? null;
-    if (!start || !end) return 0;
-    return Math.max(0, (end - start) / 3_600_000);
-  }, [startTs, endTs, effectiveStatus, now]);
 
   const scheduledHours = useMemo(() => (!startTs || !endTs) ? 0 : Math.max(0, (endTs - startTs) / 3_600_000), [startTs, endTs]);
   const basePay = (shift?.hourlyWage ?? 0) * scheduledHours;
@@ -164,9 +159,17 @@ const ShiftDetailPage: FC = () => {
   const distanceNote = getDistanceNote(distM, hasCoords);
 
   return (
-    <div className="page-shell space-y-5">
+    <div className="page-shell space-y-5 overflow-x-hidden">
       <div className="flex items-center gap-3">
-        <button onClick={() => setCurrentPage("home")} className="p-2 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Back">
+        <button
+          onClick={() => {
+            setCurrentPage("home");
+            setSelectedShift(null);
+            navigate("/home");
+          }}
+          className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+          aria-label="Back"
+        >
           <ArrowLeft size={20} className="text-gray-700" />
         </button>
         <div>
@@ -217,7 +220,6 @@ const ShiftDetailPage: FC = () => {
               <DollarSign size={16} className="mr-2" />
               <span>JOD {Number(shift?.hourlyWage ?? 0).toFixed(2)}/hr x {scheduledHours.toFixed(0)} hours</span>
             </div>
-            <div className="text-gray-500">{(TAX_RATE * 100).toFixed(0)}% worker tax</div>
           </div>
           <div className="mt-2 font-bold text-gray-900">
             {fmtMoney(Math.max(0, basePay - tax))} <span className="font-normal text-gray-500">Total</span>
@@ -265,13 +267,6 @@ const ShiftDetailPage: FC = () => {
         )}
 
         <div className="text-center text-xs text-gray-500">{distanceNote}</div>
-      </div>
-
-      <div className="card flex items-center space-x-2 text-gray-700">
-        <Clock size={18} />
-        <span>
-          {workedHours.toFixed(2)} hours - {fmtMoney(workedHours * (shift?.hourlyWage ?? 0))}
-        </span>
       </div>
     </div>
   );
