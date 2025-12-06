@@ -1,18 +1,35 @@
-import { useRef, type FC } from 'react';
+import { useMemo, useRef, type FC } from 'react';
 import { Camera, Star, Clock, Settings, Wallet } from 'lucide-react';
 import { useApp } from '../contexts/AppContext';
 import { useNavigate } from 'react-router-dom';
 
 const ProfilePage: FC = () => {
-  const { user, updateProfile } = useApp();
+  const { user, updateProfile, shifts } = useApp();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const firstName = user.firstName || '';
   const lastName = user.lastName || '';
   const email = user.email || '';
-  const rating = typeof user.rating === 'number' ? user.rating : 0;
-  const totalHours = typeof user.totalHours === 'number' ? user.totalHours : 0;
+  const numeric = (v: unknown) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+  const rating = numeric(user.rating);
+
+  const computedHours = useMemo(() => {
+    if (!user.id) return 0;
+    return shifts
+      .filter((s) => s.userId === user.id && s.startTime && s.endTime)
+      .reduce((sum, s) => {
+        const start = new Date(s.startTime as string).getTime();
+        const end = new Date(s.endTime as string).getTime();
+        if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return sum;
+        return sum + (end - start) / 3_600_000;
+      }, 0);
+  }, [shifts, user.id]);
+
+  const totalHours = Math.max(numeric(user.totalHours), computedHours);
 
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -72,14 +89,14 @@ const ProfilePage: FC = () => {
             <div className="flex items-center justify-center mb-2">
               <Star size={20} className="text-amber-600" />
             </div>
-            <div className="text-2xl font-bold text-gray-800">{rating}</div>
+            <div className="text-2xl font-bold text-gray-800">{rating.toFixed(1)}</div>
             <div className="text-sm text-gray-600">Rating</div>
           </div>
           <div className="p-4 bg-green-50 rounded-xl text-center">
             <div className="flex items-center justify-center mb-2">
               <Clock size={20} className="text-green-600" />
             </div>
-            <div className="text-2xl font-bold text-gray-800">{totalHours}</div>
+            <div className="text-2xl font-bold text-gray-800">{totalHours.toFixed(1)}</div>
             <div className="text-sm text-gray-600">Total Hours</div>
           </div>
         </div>
